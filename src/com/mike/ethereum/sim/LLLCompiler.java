@@ -11,7 +11,6 @@ import org.javatuples.Pair;
 
 import com.mike.ethereum.sim.CommonEth.u256;
 import com.mike.ethereum.sim.CommonEth.u256s;
-import com.mike.ethereum.sim.InstructionSet.OpCode;
 
 public class LLLCompiler
 {
@@ -92,37 +91,9 @@ public class LLLCompiler
 		
 		compileLispFragment(_code, o_code, o_locs);
 		
-		Log.d(TAG, disassemble(o_code));
 		return o_code;
 	}
 
-	String disassemble(u256s _mem)
-	{
-		StringBuilder sb = new StringBuilder();
-		int numerics = 0;
-		for (u256 it : _mem.getList())
-		{
-			OpCode iit = InstructionSet.OpCode.parse(it.mValue);
-			if ((numerics > 0) || (iit == null) )//|| (u256)(uint)iit->first != n)	// not an instruction or expecting an argument...
-			{
-				if (numerics > 0)
-					numerics--;
-				
-				sb.append("0x")
-					.append(it.mValue.toString(16))
-					.append(" ");
-			}
-			else
-			{
-				InstructionSet.Info info = InstructionSet.c_instructionInfo.get(iit);
-				sb.append(info.name).append(" ");
-				numerics = info.additional;
-			}
-		}
-		return sb.toString();
-	}
-
-	
 	private String c_allowed = "+-*/%<>=!";
 
 	private Input mToS;
@@ -180,7 +151,7 @@ public class LLLCompiler
 								
 								if (literalValue != null)
 									handleBareLoad(input, token, o_code, o_locs, exec, literalValue);
-								else if ( ! handleExpression (input, token, o_code, o_locs, exec))
+								else if ( ! handleKeywordOpCode (input, token, o_code, o_locs, exec))
 									break;							
 							}
 						}
@@ -249,22 +220,40 @@ public class LLLCompiler
 			mToS.next(); 
 	}
 
-	private boolean handleExpression(String input, String t, u256s o_code, List<Integer> o_locs, boolean exec)
+	private boolean handleKeywordOpCode(String input, String t, u256s o_code, List<Integer> o_locs, boolean exec)
 	{
 		t = t.toUpperCase();
 
-		if ("IF".equals (t) && ( ! handleIf(input, t, o_code, o_locs)))
-			return false;
-		else if (("WHEN".equals (t) || "UNLESS".equals (t)) && ( ! handleWhen(input, t, o_code, o_locs)))
-			return false;
-		else if (("FOR".equals (t)) && ( ! handleFor(input, t, o_code, o_locs)))
-			return false;
-		else if (("SEQ".equals (t)) && ( ! handleSeq(input, t, o_code, o_locs)))
-			return false;
-		else if (("AND".equals (t)) && ( ! handleAnd(input, t, o_code, o_locs)))
-			return false;
-		else if (("OR".equals (t)) && ( ! handleOr (input, t, o_code, o_locs)))
-			return false;
+		if ("IF".equals (t)) 
+		{
+			if ( ! handleIf(input, t, o_code, o_locs))
+				return false;
+		}
+		else if (("WHEN".equals (t)) || "UNLESS".equals (t))
+		{
+			if ( ! handleWhen(input, t, o_code, o_locs))
+				return false;
+		}
+		else if ("FOR".equals (t)) 
+		{
+			if ( ! handleFor(input, t, o_code, o_locs))
+				return false;
+		}
+		else if ("SEQ".equals (t))
+		{
+			if ( ! handleSeq(input, t, o_code, o_locs))
+				return false;
+		}
+		else if ("AND".equals (t))
+		{
+			if ( ! handleAnd(input, t, o_code, o_locs))
+				return false;
+		}
+		else if ("OR".equals (t))
+		{
+			if ( ! handleOr (input, t, o_code, o_locs))
+				return false;
+		}
 		else if ( ! handleOpCode (input, t, o_code, o_locs, exec))
 		{
 			if ( ! handleArith(input, t, o_code, o_locs))

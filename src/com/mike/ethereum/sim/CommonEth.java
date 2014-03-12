@@ -9,10 +9,34 @@ import org.javatuples.Pair;
 
 public class CommonEth
 {
-	class h256
+/*
+	using h512 = FixedHash<64>;
+	using h256 = FixedHash<32>;
+	using h160 = FixedHash<20>;
+	using h256s = std::vector<h256>;
+	using h160s = std::vector<h160>;
+	using h256Set = std::set<h256>;
+	using h160Set = std::set<h160>;
+	using Address = h160;
+	using Addresses = h160s;
+*/
+	static class Address
 	{
-		// hash 256 bits 32bytes
+		public byte[] mH = new byte[20]; // 160 bits
 	}
+	
+	static class h256
+	{
+		public byte[] mH = new byte[32]; // 256 bits
+
+		public h256 (u256 _item) 
+		{
+			assert false : "NYI";
+		}
+
+
+	}
+	
 	static class u256
 	{
 		public java.math.BigInteger mValue;
@@ -34,6 +58,11 @@ public class CommonEth
 			mValue = new BigInteger(s);
 		}
 
+		public long longValue() 
+		{
+			return mValue.longValue();
+		}
+
 		public u256 mult(long i)
 		{
 			return new u256(mValue.multiply(new BigInteger(Long.toString(i))));
@@ -42,16 +71,42 @@ public class CommonEth
 		{
 			return new u256(mValue.multiply(b.mValue));
 		}
+		public u256 divide(u256 b) 
+		{
+			return new u256(mValue.divide(b.mValue));
+		}
+		public u256 add(int i) 
+		{
+			return add (new u256(i));
+		}
 		public u256 add(u256 b)
 		{
 			return new u256(mValue.add(b.mValue));
 		}
 		
+		public boolean greaterThan(int i) 
+		{
+			return mValue.compareTo(new BigInteger(Integer.toString(i))) > 0;
+		}
+		public boolean greaterThanEqual(int i) 
+		{
+			return mValue.compareTo(new BigInteger(Integer.toString(i))) >= 0;
+		}
+		public boolean lessThan(int i) 
+		{
+			return mValue.compareTo(new BigInteger(Integer.toString(i))) < 0;
+		}
+		public boolean lessThanEqual(int i) 
+		{
+			return mValue.compareTo(new BigInteger(Integer.toString(i))) <= 0;
+		}
+
 		@Override
 		public String toString()
 		{
 			return mValue.toString();
 		}
+		
 	}
 	
 	static class u256s
