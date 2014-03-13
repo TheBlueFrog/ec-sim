@@ -172,6 +172,33 @@ public class CommonEth
 			return mValue.toString();
 		}
 		
+		@Override
+	    public int hashCode()
+	    {
+	        int result = HashCodeUtils.SEED;
+	        result = HashCodeUtils.hash(result, mValue);
+	        return result;
+	    }
+
+		/**
+		 * we are sensitive to the file name and it's status, we
+		 * do not care about the server path or the File object
+		 */
+	    @Override
+	    public boolean equals(Object obj)
+	    {
+	        if (this == obj)
+	            return true;
+	        if (obj == null)
+	            return false;
+	        if (getClass() != obj.getClass())
+	            return false;
+	        
+	        u256 d = (u256) obj;
+	        
+			return mValue.equals(d.mValue);
+		}
+
 	}
 	
 	static class u256s
