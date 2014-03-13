@@ -65,8 +65,8 @@ public class Main
 	{
 		// send a transaction to the contract
 		
-		Address contract = new Address ();
-		Address sender = new Address ();
+		Address contract = new Address (new u256(101));
+		Address sender = new Address (new u256(102));
 		u256 amount = new u256 (1);
 		u256s data = new u256s ();
 		u256 fees = new u256(0);
@@ -76,10 +76,19 @@ public class Main
 	
 	static private void execute(Address _myAddress, Address _txSender, u256 _txValue, u256s _txData, u256 totalFee)
 	{
-		VM vm;
-		
-		ExtVM evm(*this, _myAddress, _txSender, _txValue, _txData);
-		vm.go(evm);
+		FeeStructure fs = new FeeStructure();
+		VirtualMachineEnvironment vme = new VirtualMachineEnvironment(_myAddress, _txSender, _txValue, _txData, fs, null, null, 0);
+
+		VirtualMachine vm = new VirtualMachine(); 
+
+		try
+		{
+			vm.go(vme, 1000);
+		} 
+		catch (BadInstructionExeption | StackTooSmall | StepsDoneException e) 
+		{
+			e.printStackTrace();
+		}
 
 		totalFee.add(vm.runFee());
 	}

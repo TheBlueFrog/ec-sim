@@ -23,6 +23,11 @@ public class CommonEth
 	static class Address
 	{
 		public byte[] mH = new byte[20]; // 160 bits
+
+		public Address (u256 i)
+		{
+			// take rightmost 160 bits?
+		}
 	}
 	
 	static class h256
@@ -33,8 +38,28 @@ public class CommonEth
 		{
 			assert false : "NYI";
 		}
+	}
+	
+	static class u160
+	{
+		public java.math.BigInteger mValue;
 
-
+		public u160(u256 i)
+		{
+			mValue = i.mValue;
+		}
+		public u160(long i)
+		{
+			mValue = new BigInteger(Long.toString(i));
+		}
+		public u160(java.math.BigInteger i)
+		{
+			mValue = i;
+		}
+		public u160(String s)
+		{
+			mValue = new BigInteger(s);
+		}
 	}
 	
 	static class u256
@@ -57,7 +82,15 @@ public class CommonEth
 		{
 			mValue = new BigInteger(s);
 		}
+		public u256(byte[] b) 
+		{
+			mValue = new BigInteger(b);
+		}
 
+		public int intValue()
+		{
+			return mValue.intValue();
+		}
 		public long longValue() 
 		{
 			return mValue.longValue();
@@ -83,22 +116,54 @@ public class CommonEth
 		{
 			return new u256(mValue.add(b.mValue));
 		}
+		public u256 subtract(u256 b) 
+		{
+			return new u256(mValue.subtract(b.mValue));
+		}
+		public u256 mod(u256 b) 
+		{
+			return new u256(mValue.mod(b.mValue));
+		}
 		
+		public boolean equal(int i) 
+		{
+			return mValue.compareTo(new BigInteger(Integer.toString(i))) == 0;
+		}
+		public boolean equal(u256 i) 
+		{
+			return mValue.compareTo(i.mValue) == 0;
+		}
 		public boolean greaterThan(int i) 
 		{
 			return mValue.compareTo(new BigInteger(Integer.toString(i))) > 0;
+		}
+		public boolean greaterThan(u256 y)
+		{
+			return mValue.compareTo(y.mValue) > 0;
 		}
 		public boolean greaterThanEqual(int i) 
 		{
 			return mValue.compareTo(new BigInteger(Integer.toString(i))) >= 0;
 		}
+		public boolean greaterThanEqual(u256 y)
+		{
+			return mValue.compareTo(y.mValue) >= 0;
+		}
 		public boolean lessThan(int i) 
 		{
 			return mValue.compareTo(new BigInteger(Integer.toString(i))) < 0;
 		}
+		public boolean lessThan(u256 y) 
+		{
+			return mValue.compareTo(y.mValue) < 0;
+		}
 		public boolean lessThanEqual(int i) 
 		{
 			return mValue.compareTo(new BigInteger(Integer.toString(i))) <= 0;
+		}
+		public boolean lessThanEqual(u256 y) 
+		{
+			return mValue.compareTo(y.mValue) <= 0;
 		}
 
 		@Override

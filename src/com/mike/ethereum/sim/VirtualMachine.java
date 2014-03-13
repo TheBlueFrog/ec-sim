@@ -1,7 +1,9 @@
 package com.mike.ethereum.sim;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import com.mike.ethereum.sim.CommonEth.Address;
 import com.mike.ethereum.sim.CommonEth.u256;
@@ -12,12 +14,12 @@ public class VirtualMachine
 	// Currently we just pull out the right (low-order in BE) 160-bits.
 	private Address asAddress(u256 _item)
 	{
-//		return right160( new h256 (_item));
+		return new Address (_item);
 	}
 
 	private u256 fromAddress(Address _a)
 	{
-//		return (u160)_a;
+		return new u256 (_a.mH);
 	}
 
 	public VirtualMachine ()
@@ -42,17 +44,17 @@ public class VirtualMachine
 	
 	private	long m_stepCount = 0L;
 
-//	std::map<u256, u256> m_temp;
+	private Map<u256, u256> mMemory = new HashMap<u256, u256>();
 	
 	private int STACK_SIZE = 1000;
 	List<u256> m_stack = new ArrayList<u256>(STACK_SIZE);
 
-	void require(u256 _n)
+	void require(u256 _n) throws StackTooSmall
 	{
 		if (_n.greaterThan(STACK_SIZE))
 			throw new StackTooSmall(""); 
 	}
-	void require(int i)
+	void require(int i) throws StackTooSmall
 	{
 		if (i > STACK_SIZE)
 			throw new StackTooSmall(""); 
@@ -73,7 +75,8 @@ public class VirtualMachine
 		m_stack.add(x);
 	}
 	
-	public void go(VirtualMachineEnvironment _ext, long _steps)
+	public void go(VirtualMachineEnvironment _ext, long _steps) 
+			throws BadInstructionExeption, StackTooSmall, StepsDoneException
 	{
 		for (boolean stopped = false; 
 				! stopped && (_steps-- > 0); 
@@ -82,11 +85,12 @@ public class VirtualMachine
 			m_stepCount++;
 
 			// INSTRUCTION...
-			u256 rawInst = _ext.store(m_curPC);
+			u256 rawInst = _ext.getStore(m_curPC);
+			
 			if (rawInst.greaterThan(0xff))
 				throw new BadInstructionExeption("");
 			
-			Instruction inst = (Instruction)(uint8_t)rawInst;
+			InstructionSet.OpCode inst = InstructionSet.OpCode.parse(rawInst);
 
 //			// FEES...
 //			long runFee = m_stepCount > 16 ? _ext.fees.m_stepFee.longValue() : 0;
@@ -128,134 +132,156 @@ public class VirtualMachine
 //			_ext.payFee(runFee + storeCostDelta);
 //			m_runFee += (u256)runFee;
 
+			u256 x;
+			u256 y;
+			
 			// EXECUTE...
 			switch (inst)
 			{
-			case InstructionSet.OpCode.ADD:
+			case ADD:
 				//pops two items and pushes S[-1] + S[-2] mod 2^256.
 				require(2);
-				int i = m_stack.size();
-				u256 x = peek(-2).add(peek(-1));
-				popStack();
-				popStack();
-				m_stack.add(x);
+				x = popStack();
+				y = popStack();
+				pushStack(x.add(y));
 				break;
-			case InstructionSet.OpCode.MUL:
+			case MUL:
 				//pops two items and pushes S[-1] * S[-2] mod 2^256.
 				require(2);
-				m_stack[m_stack.size() - 2] *= m_stack.back();
-				m_stack.pop_back();
+				x = popStack();
+				y = popStack();
+				pushStack(x.mult(y));
 				break;
-			case InstructionSet.OpCode.SUB:
+			case SUB:
 				require(2);
-				m_stack[m_stack.size() - 2] = m_stack.back() - m_stack[m_stack.size() - 2];
-				m_stack.pop_back();
+				x = popStack();
+				y = popStack();
+				pushStack(x.subtract(y));
 				break;
-			case InstructionSet.OpCode.DIV:
+			case DIV:
 				require(2);
-				m_stack[m_stack.size() - 2] = m_stack.back() / m_stack[m_stack.size() - 2];
-				m_stack.pop_back();
+				x = popStack();
+				y = popStack();
+				pushStack(x.divide(y));
 				break;
-			case InstructionSet.OpCode.SDIV:
+			case SDIV:
 				require(2);
 				assert false : "NYI";
 //				(s256&)m_stack[m_stack.size() - 2] = (s256&)m_stack.back() / (s256&)m_stack[m_stack.size() - 2];
-				m_stack.pop_back();
+//				m_stack.pop_back();
 				break;
-			case InstructionSet.OpCode.MOD:
+			case MOD:
 				require(2);
-				m_stack[m_stack.size() - 2] = m_stack.back() % m_stack[m_stack.size() - 2];
-				m_stack.pop_back();
+				x = popStack();
+				y = popStack();
+				pushStack(x.mod(y));
 				break;
-			case InstructionSet.OpCode.SMOD:
+			case SMOD:
 				require(2);
 				assert false : "NYI";
 //				(s256&)m_stack[m_stack.size() - 2] = (s256&)m_stack.back() % (s256&)m_stack[m_stack.size() - 2];
-				m_stack.pop_back();
+//				m_stack.pop_back();
 				break;
-			case InstructionSet.OpCode.EXP:
+			case EXP:
 			{
 				// TODO: better implementation?
 				require(2);
-				auto n = m_stack.back();
-				auto x = m_stack[m_stack.size() - 2];
-				m_stack.pop_back();
-				for (u256 i = 0; i < x; ++i)
-					n *= n;
-				m_stack.back() = n;
+				assert false : "NYI";
+//				auto n = m_stack.back();
+//				auto x = m_stack[m_stack.size() - 2];
+//				m_stack.pop_back();
+//				for (u256 i = 0; i < x; ++i)
+//					n *= n;
+//				m_stack.back() = n;
 				break;
 			}
-			case InstructionSet.OpCode.NEG:
+			case NEG:
 				require(1);
-				m_stack.back() = ~(m_stack.back() - 1);
+				assert false : "NYI";
+//				m_stack.back() = ~(m_stack.back() - 1);
 				break;
-			case InstructionSet.OpCode.LT:
+			case LT:
 				require(2);
-				m_stack[m_stack.size() - 2] = m_stack.back() < m_stack[m_stack.size() - 2] ? 1 : 0;
-				m_stack.pop_back();
+				x = popStack();
+				y = popStack();
+				pushStack(x.lessThan(y) ? new u256(1) : new u256(0));
 				break;
-			case InstructionSet.OpCode.LE:
+			case LE:
 				require(2);
-				m_stack[m_stack.size() - 2] = m_stack.back() <= m_stack[m_stack.size() - 2] ? 1 : 0;
-				m_stack.pop_back();
+				x = popStack();
+				y = popStack();
+				pushStack(x.lessThanEqual(y) ? new u256(1) : new u256(0));
 				break;
-			case InstructionSet.OpCode.GT:
+			case GT:
 				require(2);
-				m_stack[m_stack.size() - 2] = m_stack.back() > m_stack[m_stack.size() - 2] ? 1 : 0;
-				m_stack.pop_back();
+				x = popStack();
+				y = popStack();
+				pushStack(x.greaterThan(y) ? new u256(1) : new u256(0));
 				break;
-			case InstructionSet.OpCode.GE:
+			case GE:
 				require(2);
-				m_stack[m_stack.size() - 2] = m_stack.back() >= m_stack[m_stack.size() - 2] ? 1 : 0;
-				m_stack.pop_back();
+				x = popStack();
+				y = popStack();
+				pushStack(x.greaterThanEqual(y) ? new u256(1) : new u256(0));
 				break;
-			case InstructionSet.OpCode.EQ:
+			case EQ:
 				require(2);
-				m_stack[m_stack.size() - 2] = m_stack.back() == m_stack[m_stack.size() - 2] ? 1 : 0;
-				m_stack.pop_back();
+				x = popStack();
+				y = popStack();
+				pushStack(x.equal(y) ? new u256(1) : new u256(0));
 				break;
-			case InstructionSet.OpCode.NOT:
+			case NOT:
 				require(1);
-				m_stack.back() = m_stack.back() ? 0 : 1;
+				x = popStack();
+				pushStack(x.equal(0) ? new u256(0) : new u256(1));
 				break;
-			case InstructionSet.OpCode.MYADDRESS:
-				m_stack.push_back(fromAddress(_ext.myAddress));
+			case MYADDRESS:
+				pushStack(fromAddress(_ext.myAddress));
 				break;
-			case InstructionSet.OpCode.TXSENDER:
-				m_stack.push_back(fromAddress(_ext.txSender));
+			case TXSENDER:
+				pushStack(fromAddress(_ext.txSender));
 				break;
-			case InstructionSet.OpCode.TXVALUE:
-				m_stack.push_back(_ext.txValue);
+			case TXVALUE:
+				pushStack(_ext.txValue);
 				break;
-			case InstructionSet.OpCode.TXDATAN:
-				m_stack.push_back(_ext.txData.size());
+			case TXDATAN:
+				pushStack(new u256(_ext.txData.size()));
 				break;
-			case InstructionSet.OpCode.TXDATA:
+			case TXDATA:
 				require(1);
-				m_stack.back() = m_stack.back() < _ext.txData.size() ? _ext.txData[(uint)m_stack.back()] : 0;
+				x = popStack();
+				int ix = x.intValue();
+				int i = _ext.txData.size();
+				pushStack(x.lessThan(_ext.txData.size()) ? _ext.txData.get(ix) : new u256(0));
 				break;
-			case InstructionSet.OpCode.BLK_PREVHASH:
-				m_stack.push_back(_ext.previousBlock.hash);
+			case BLK_PREVHASH:
+				assert false : "NYI";
+//				m_stack.push_back(_ext.previousBlock.hash);
 				break;
-			case InstructionSet.OpCode.BLK_COINBASE:
-				m_stack.push_back((u160)_ext.currentBlock.coinbaseAddress);
+			case BLK_COINBASE:
+				assert false : "NYI";
+//				m_stack.push_back((u160)_ext.currentBlock.coinbaseAddress);
 				break;
-			case InstructionSet.OpCode.BLK_TIMESTAMP:
-				m_stack.push_back(_ext.currentBlock.timestamp);
+			case BLK_TIMESTAMP:
+				assert false : "NYI";
+//				m_stack.push_back(_ext.currentBlock.timestamp);
 				break;
-			case InstructionSet.OpCode.BLK_NUMBER:
-				m_stack.push_back(_ext.currentNumber);
+			case BLK_NUMBER:
+				assert false : "NYI";
+//				m_stack.push_back(_ext.currentNumber);
 				break;
-			case InstructionSet.OpCode.BLK_DIFFICULTY:
-				m_stack.push_back(_ext.currentBlock.difficulty);
+			case BLK_DIFFICULTY:
+				assert false : "NYI";
+//				m_stack.push_back(_ext.currentBlock.difficulty);
 				break;
-			case InstructionSet.OpCode.BLK_NONCE:
-				m_stack.push_back(_ext.previousBlock.nonce);
+			case BLK_NONCE:
+				assert false : "NYI";
+//				m_stack.push_back(_ext.previousBlock.nonce);
 				break;
-			case InstructionSet.OpCode.BASEFEE:
-				m_stack.push_back(_ext.fees.multiplier());
+			case BASEFEE:
+				pushStack(_ext.fees.multiplier());
 				break;
-			case InstructionSet.OpCode.SHA256:
+			case SHA256:
 			{
 				require(1);
 				assert false : "NYI";
@@ -275,7 +301,7 @@ public class VirtualMachine
 //				m_stack.push_back(fromBigEndian<u256>(final));
 				break;
 			}
-			case InstructionSet.OpCode.RIPEMD160:
+			case RIPEMD160:
 			{
 				require(1);
 				assert false : "NYI";
@@ -297,7 +323,7 @@ public class VirtualMachine
 //				m_stack.push_back((u256)fromBigEndian<u160>(final));
 				break;
 			}
-			case InstructionSet.OpCode.ECMUL:
+			case ECMUL:
 			{
 				// ECMUL - pops three items.
 				// If (S[-2],S[-1]) are a valid point in secp256k1, including both coordinates being less than P, pushes (S[-1],S[-2]) * S[-3], using (0,0) as the point at infinity.
@@ -327,7 +353,7 @@ public class VirtualMachine
 //				}
 				break;
 			}
-			case InstructionSet.OpCode.ECADD:
+			case ECADD:
 			{
 				// ECADD - pops four items and pushes (S[-4],S[-3]) + (S[-2],S[-1]) if both points are valid, otherwise (0,0).
 				require(4);
@@ -358,7 +384,7 @@ public class VirtualMachine
 //				}
 				break;
 			}
-			case InstructionSet.OpCode.ECSIGN:
+			case ECSIGN:
 			{
 				require(2);
 				assert false : "NYI";
@@ -379,7 +405,7 @@ public class VirtualMachine
 //				m_stack.push_back(fromBigEndian<u256>(bytesConstRef(&sig).cropped(32)));
 				break;
 			}
-			case InstructionSet.OpCode.ECRECOVER:
+			case ECRECOVER:
 			{
 				require(4);
 				assert false : "NYI";
@@ -406,7 +432,7 @@ public class VirtualMachine
 //				}
 				break;
 			}
-			case InstructionSet.OpCode.ECVALID:
+			case ECVALID:
 			{
 				require(2);
 				assert false : "NYI";
@@ -419,7 +445,7 @@ public class VirtualMachine
 //				m_stack.back() = secp256k1_ecdsa_pubkey_verify(pub.data(), (int)pub.size()) ? 1 : 0;
 				break;
 			}
-			case InstructionSet.OpCode.SHA3:
+			case SHA3:
 			{
 				require(1);
 				assert false : "NYI";
@@ -439,22 +465,20 @@ public class VirtualMachine
 //				m_stack.push_back(fromBigEndian<u256>(final));
 				break;
 			}
-			case InstructionSet.OpCode.PUSH:
-			{
-				m_stack.push_back(_ext.store(m_curPC + 1));
-				m_nextPC = m_curPC + 2;
+			case PUSH:
+				pushStack(_ext.getStore(m_curPC.add(1)));
+				m_nextPC = m_curPC.add(2);
 				break;
-			}
-			case InstructionSet.OpCode.POP:
+			case POP:
 				require(1);
 				popStack();
 				break;
-			case InstructionSet.OpCode.DUP:
+			case DUP:
 				require(1);
 				pushStack(peekStack(0));
 				break;
 				
-			/*case InstructionSet.OpCode.DUPN:
+			/*case DUPN:
 			{
 				auto s = store(curPC + 1);
 				if (s == 0 || s > stack.size())
@@ -464,16 +488,16 @@ public class VirtualMachine
 				break;
 			}*/
 
-			case InstructionSet.OpCode.SWAP:
+			case SWAP:
 			{
 				require(2);
 				x = popStack();
-				u256 y = popStack();
-				pushStack(y);
+				y = popStack();
 				pushStack(x);
+				pushStack(y);
 				break;
 			}
-			/*case InstructionSet.OpCode.SWAPN:
+			/*case SWAPN:
 			{
 				require(1);
 				auto d = stack.back();
@@ -485,7 +509,7 @@ public class VirtualMachine
 				nextPC = curPC + 2;
 				break;
 			}*/
-			case InstructionSet.OpCode.MLOAD:
+			case MLOAD:
 			{
 				require(1);
 //	#ifdef __clang__
@@ -495,11 +519,12 @@ public class VirtualMachine
 //				else
 //					m_stack.back() = 0;
 //	#else
-				m_stack.back() = m_temp[m_stack.back()];
+				x = popStack();
+				pushStack(mMemory.get(x));
 //	#endif
 				break;
 			}
-			case InstructionSet.OpCode.MSTORE:
+			case MSTORE:
 			{
 				require(2);
 //	#ifdef __clang__
@@ -509,90 +534,93 @@ public class VirtualMachine
 //				else
 //					mFinder->second = m_stack[m_stack.size() - 2];
 //	#else
-				m_temp[m_stack.back()] = m_stack[m_stack.size() - 2];
+				x = popStack();
+				y = popStack();
+				mMemory.put(x, y);
 //	#endif
-				m_stack.pop_back();
-				m_stack.pop_back();
 				break;
 			}
-			case InstructionSet.OpCode.SLOAD:
+			case SLOAD:
 				require(1);
-				m_stack.back() = _ext.store(m_stack.back());
+				x = popStack();
+				pushStack(_ext.getStore(x));
 				break;
-			case InstructionSet.OpCode.SSTORE:
+			case SSTORE:
 				require(2);
-				_ext.setStore(m_stack.back(), m_stack[m_stack.size() - 2]);
-				m_stack.pop_back();
-				m_stack.pop_back();
+				x = popStack();
+				y = popStack();
+				_ext.setStore(x, y);
 				break;
-			case InstructionSet.OpCode.JMP:
+			case JMP:
 				require(1);
-				m_nextPC = m_stack.back();
-				m_stack.pop_back();
+				m_nextPC = popStack();
 				break;
-			case InstructionSet.OpCode.JMPI:
+			case JMPI:
 				require(2);
-				if (m_stack.back())
-					m_nextPC = m_stack[m_stack.size() - 2];
-				m_stack.pop_back();
-				m_stack.pop_back();
+				x = popStack();
+				y = popStack();
+				if ( ! x.equal(0))
+					m_nextPC = y;
 				break;
-			case InstructionSet.OpCode.IND:
-				m_stack.push_back(m_curPC);
+			case IND:
+				pushStack(m_curPC);
 				break;
-			case InstructionSet.OpCode.EXTRO:
+			case EXTRO:
 			{
 				require(2);
-				auto memoryAddress = m_stack.back();
-				m_stack.pop_back();
-				Address contractAddress = asAddress(m_stack.back());
-				m_stack.back() = _ext.extro(contractAddress, memoryAddress);
+				x = popStack();
+				y = popStack();
+				Address contractAddress = asAddress(y);
+				pushStack(_ext.extro(contractAddress, x));
 				break;
 			}
-			case InstructionSet.OpCode.BALANCE:
+			case BALANCE:
 			{
 				require(1);
-				m_stack.back() = _ext.balance(asAddress(m_stack.back()));
+				x = popStack();
+				pushStack(_ext.balance(asAddress(x)));
 				break;
 			}
-			case InstructionSet.OpCode.MKTX:
+			case MKTX:
 			{
 				require(3);
+				assert false : "NYI";
 
-				Transaction t;
-				t.receiveAddress = asAddress(m_stack.back());
-				m_stack.pop_back();
-				t.value = m_stack.back();
-				m_stack.pop_back();
-
-				auto itemCount = m_stack.back();
-				m_stack.pop_back();
-				if (m_stack.size() < itemCount)
-					throw OperandOutOfRange(0, m_stack.size(), itemCount);
-				t.data.reserve((uint)itemCount);
-				for (auto i = 0; i < itemCount; ++i)
-				{
-					t.data.push_back(m_stack.back());
-					m_stack.pop_back();
-				}
-
-				_ext.mktx(t);
+//				Transaction t;
+//				t.receiveAddress = asAddress(m_stack.back());
+//				m_stack.pop_back();
+//				t.value = m_stack.back();
+//				m_stack.pop_back();
+//
+//				auto itemCount = m_stack.back();
+//				m_stack.pop_back();
+//				if (m_stack.size() < itemCount)
+//					throw OperandOutOfRange(0, m_stack.size(), itemCount);
+//				t.data.reserve((uint)itemCount);
+//				for (auto i = 0; i < itemCount; ++i)
+//				{
+//					t.data.push_back(m_stack.back());
+//					m_stack.pop_back();
+//				}
+//
+//				_ext.mktx(t);
 				break;
 			}
-			case InstructionSet.OpCode.SUICIDE:
+			case SUICIDE:
 			{
 				require(1);
-				Address dest = asAddress(m_stack.back());
+				Address dest = asAddress(peekStack(0));
 				_ext.suicide(dest);
 				// ...follow through to...
 			}
-			case InstructionSet.OpCode.STOP:
+			case STOP:
 				return;
 			default:
-				throw BadInstruction();
+				throw new BadInstructionExeption("Unknown opcode " + inst.toString());
 			}
 		}
-		if (_steps == (unsigned)-1)
-			throw StepsDone();
-
+		
+		if (_steps == -1)
+			throw new StepsDoneException("Ran out of steps");
+	}
 }

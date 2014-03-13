@@ -4,6 +4,8 @@ import java.math.BigInteger;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.mike.ethereum.sim.CommonEth.u256;
+
 public class InstructionSet
 {
 	static public enum OpCode  
@@ -83,6 +85,11 @@ public class InstructionSet
 			}
 			
 			return null;
+		}
+
+		public static OpCode parse(u256 x) 
+		{
+			return parse(x.mValue);
 		}
 	};
 
