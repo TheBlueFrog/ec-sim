@@ -21,8 +21,21 @@ public class VirtualMachineEnvironment
 	{
 		
 	}
+
+	public VirtualMachineEnvironment()
+	{
+	}
 	
-	public VirtualMachineEnvironment(
+	/** load the contract into memory starting at
+	 * address zero
+	 */
+	public void setContract (u256s memory)
+	{
+		for (int i = 0; i < memory.size(); ++i)
+			mStorage.put(new u256(i), memory.get(i));
+	}
+	
+	public void setup(
 			Address _myAddress, 
 			Address _txSender, 
 			u256 _txValue, 

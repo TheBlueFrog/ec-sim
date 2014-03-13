@@ -15,13 +15,24 @@ public class Main
 
 		String[] a = new String[]
 		{
- 			   "(seq"
-		  	 + "  (* 20 (basefee)) (stop)"
-		  	 + ")",
+ 			  "(seq"
+		  	+ "  (* 20 (basefee)) (stop)"
+		  	+ ")",
 			 
-		  	   "(seq"
-			 + "  (unless (>= (txvalue) (* 20 (basefee))) (stop))"
-			 + ")"
+//		  	  "(seq"
+//			+ "  (unless (>= (txvalue) (* 20 (basefee))) (stop))"
+//			+ ")",
+			 
+			  "(seq"
+			+ "  (unless (>= (txvalue) (* 20 (basefee))) (stop))"
+			+ "  (sstore"
+			+ "    (txsender)"
+			+ "    (+"
+			+ "      (sload (txsender))"
+			+ "		 (- (txvalue) (* 20 (basefee)))"
+			+ "	   )"
+			+ "  )"
+			+ ")",
 		};
 		
 		for (String s : a)
@@ -31,7 +42,7 @@ public class Main
 
 			Log.d(TAG, "Disassembles to " + disassemble(memory));
 			
-			execute (memory);
+			new Executor (memory);
 		}
 	}
 	
@@ -61,36 +72,44 @@ public class Main
 		return sb.toString();
 	}
 
-	static void execute(u256s memory)
+	static private class Executor 
 	{
-		// send a transaction to the contract
+		VirtualMachineEnvironment vme = new VirtualMachineEnvironment();
 		
-		Address contract = new Address (new u256(101));
-		Address sender = new Address (new u256(102));
-		u256 amount = new u256 (1);
-		u256s data = new u256s ();
-		u256 fees = new u256(0);
-		
-		execute(contract, sender, amount, data, fees);
-	}
-	
-	static private void execute(Address _myAddress, Address _txSender, u256 _txValue, u256s _txData, u256 totalFee)
-	{
-		FeeStructure fs = new FeeStructure();
-		VirtualMachineEnvironment vme = new VirtualMachineEnvironment(_myAddress, _txSender, _txValue, _txData, fs, null, null, 0);
-
-		VirtualMachine vm = new VirtualMachine(); 
-
-		try
+		public Executor (u256s memory)
 		{
-			vm.go(vme, 1000);
-		} 
-		catch (BadInstructionExeption | StackTooSmall | StepsDoneException e) 
-		{
-			e.printStackTrace();
+			FeeStructure fs = new FeeStructure();
+			
+			vme.setContract(memory);
+
+			// send a transaction to the contract
+			
+			Address contract = new Address (new u256(101));
+			Address sender = new Address (new u256(102));
+			u256 amount = new u256 (1);
+			u256s data = new u256s ();
+			u256 fees = new u256(0);
+			
+			vme.setup(contract, sender, amount, data, fs, null, null, 0);
+			
+			execute(contract, sender, amount, data, fees);
 		}
-
-		totalFee.add(vm.runFee());
+	
+		private void execute(Address _myAddress, Address _txSender, u256 _txValue, u256s _txData, u256 totalFee)
+		{
+			VirtualMachine vm = new VirtualMachine(); 
+		
+			try
+			{
+				vm.go(vme, 1000);
+			} 
+			catch (BadInstructionExeption | StackTooSmall | StepsDoneException e) 
+			{
+				e.printStackTrace();
+			}
+		
+			totalFee.add(vm.runFee());
+		}
 	}
 
 

@@ -10,6 +10,8 @@ import com.mike.ethereum.sim.CommonEth.u256;
 
 public class VirtualMachine 
 {
+	private static final String TAG = VirtualMachine.class.getSimpleName();
+
 	// Convert from a 256-bit integer stack/memory entry into a 160-bit Address hash.
 	// Currently we just pull out the right (low-order in BE) 160-bits.
 	private Address asAddress(u256 _item)
@@ -74,6 +76,15 @@ public class VirtualMachine
 	{
 		m_stack.add(x);
 	}
+	private void dumpStack()
+	{
+		for(int i = m_stack.size() - 1; i >= 0; --i)
+		{
+			u256 u = m_stack.get(i);
+			Log.d(TAG, String.format("Stack[%2d] %s", i, u.toString()));
+		}
+		Log.d(TAG, "");
+	}
 	
 	public void go(VirtualMachineEnvironment _ext, long _steps) 
 			throws BadInstructionExeption, StackTooSmall, StepsDoneException
@@ -136,6 +147,8 @@ public class VirtualMachine
 			u256 y;
 			
 			// EXECUTE...
+			Log.d(TAG, String.format("Execute %s, ", inst.toString()));
+			
 			switch (inst)
 			{
 			case ADD:
@@ -618,6 +631,8 @@ public class VirtualMachine
 			default:
 				throw new BadInstructionExeption("Unknown opcode " + inst.toString());
 			}
+			
+			dumpStack();
 		}
 		
 		if (_steps == -1)
