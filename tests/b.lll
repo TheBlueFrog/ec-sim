@@ -1,0 +1,25 @@
+(seq
+; this leaves the stack happy 
+;  (unless (>= (txvalue) (* 20 (basefee))) (stop))
+;  (unless (>= (txvalue) (* 20 (basefee))) (stop))
+
+; this leave 4 101's on the stack
+;  (unless (<= (txvalue) (* 20 (basefee))) (+ 100 1))
+;  (unless (<= (txvalue) (* 20 (basefee))) (+ 100 1))
+;  (unless (<= (txvalue) (* 20 (basefee))) (+ 100 1))
+  (unless (<= (txvalue) (* 20 (basefee))) (+ 100 1))
+
+; 'for' leaves guck on the stack
+;  (for 1 (+ 55 66))
+
+; 'if' leaves guck on the stack, apparently the result of
+; the last evaluation
+;  (if 1 (+ 1 2) (* 8 9) )
+;  (if 0 (+ 1 2) (* 8 9) )
+;  (if 1 (+ 1 2) (* 8 9) )
+;  (if 0 (+ 1 2) (* 8 9) )
+;  (if 1 (+ 1 2) (* 8 9) )
+
+
+
+)

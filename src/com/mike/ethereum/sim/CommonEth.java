@@ -133,7 +133,10 @@ public class CommonEth
 		}
 		public u256(String s)
 		{
-			mValue = new BigInteger(s);
+			if (s.startsWith("0x") || s.startsWith("0X"))
+				mValue = new BigInteger(s.substring(2), 16);
+			else
+				mValue = new BigInteger(s);
 		}
 		public u256(byte[] b) 
 		{

@@ -25,16 +25,17 @@ public class Disassembler
 
 				for (int j = 0; j < info.additional; ++j)
 				{
-					sb.append("0x")
-					.append(memory.getList().get(i++).mValue.toString(16))
-					.append(" ");
+					int k = i++;
+					sb.append(String.format("0x%s (%s)",
+							memory.getList().get(k).mValue.toString(16),
+							memory.getList().get(k).mValue.toString()));
 				}				
 			}
 			else
 			{
-				sb.append("0x")
-					.append(it.mValue.toString(16))
-					.append(" ");
+				sb.append(String.format("0x%s (%s)",
+						it.mValue.toString(16),
+						it.mValue.toString()));
 			}
 			
 			sb.append ("\n");

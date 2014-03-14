@@ -339,7 +339,8 @@ public class LLLCompiler
 			{
 				appendCode(compiled, c);
 				
-				while (compileLispFragment(mToS.rest(), c))
+				Compiled j = new Compiled();
+				while (compileLispFragment(mToS.rest(), j))
 					if (! mQuiet)
 						Log.e(TAG, "Additional items in bare store. Ignoring.");
 
@@ -369,86 +370,95 @@ public class LLLCompiler
 	private boolean handleIf(String input, String t, Compiled compiled)
 	{
 		// Compile all the code...
-		List<Compiled> cc = new ArrayList<Compiled>();
-		for (int i = 0; i < 4; ++i)
+		List<Compiled> fragments = new ArrayList<Compiled>();
+		for (int i = 0; i < 3; ++i)
 		{
 			Compiled c = new Compiled();
-			cc.add (c);
+			fragments.add (c);
 
 			if ( ! compileLispFragment(mToS.rest(), c))
 				return false;
-
-//			if (compileLispFragment(input.substring(d), _quiet, codes[3], locs[3]))
-//			return false;
 		}
 
-		// Push the positive location.
-		int posLocation = compiled.addPushInstructionWith(0);
-		compiled.addLoc(posLocation);
+		// save first patch location and push a placeholder
+		// for the positive code location
+		int patch1 = compiled.addPushInstructionWith(0);
+		compiled.addLoc(patch1);
 
-		// First fragment - predicate
-		appendCode(compiled, cc.get(0));
+		// output predicate, it will leave zero/nonzero on tos
+		appendCode(compiled, fragments.get(0));
 
-		// Jump to positive if true.
+		// jump to positive if nonzero
 		compiled.addInstruction(InstructionSet.OpCode.JMPI);
 
-		// Second fragment - negative.
-		appendCode(compiled, cc.get(2));
+		// output false code block
+		appendCode(compiled, fragments.get(2));
 
-		// Jump to end after negative.
-		int endLocation = compiled.addPushInstructionWith(0);
-		compiled.addLoc(endLocation);
+		// unconditional jump to after true code block
+		int patch2 = compiled.addPushInstructionWith(0);
+		compiled.addLoc(patch2);
 		compiled.addInstruction(InstructionSet.OpCode.JMP);
 
-		// Third fragment - positive.
-		compiled.setCode(posLocation, compiled.getCode().size());
-		appendCode(compiled, cc.get(1));
+		// at start of true code block, patch first jump
+		compiled.setCode(patch1, compiled.getCode().size());
+		
+		// output true code block
+		appendCode(compiled, fragments.get(1));
 
-		// At end now.
-		compiled.setCode(endLocation, compiled.getCode().size());
+		// patch conditional jump at end of false block
+		compiled.setCode(patch2, compiled.getCode().size());
 		return true;
 	}
 
 	private boolean handleWhen(String input, String t, Compiled compiled)
 	{
 		// Compile all the code...
-		List<Compiled> cc = new ArrayList<Compiled>();
+		List<Compiled> fragments = new ArrayList<Compiled>();
 		for (int i = 0; i < 2; ++i)
 		{
 			Compiled c = new Compiled();
-			cc.add (c);
+			fragments.add (c);
 			if ( ! compileLispFragment(mToS.rest(), c))
 				return false;
 		}
 		
-		// Push the positive location.
-		int endLocation = compiled.addPushInstructionWith(0);
-		compiled.addLoc(endLocation);
+		// record where we have to patch to get past this
+		// whole statement
+		int patch1 = compiled.addPushInstructionWith(0);
+		compiled.addLoc(patch1);
 
-		// First fragment - predicate
-		appendCode(compiled, cc.get(0));
+		// output the predicate that will leave zero/nonzero on the
+		// stack
+		appendCode(compiled, fragments.get(0));
 
-		// Jump to end...
 		if (t == "WHEN")
 			compiled.addInstruction(InstructionSet.OpCode.NOT);
+
+		// jump if nonzero to the location to be patched 
 		compiled.addInstruction(InstructionSet.OpCode.JMPI);
 
-		// Second fragment - negative.
-		appendCode(compiled, cc.get(1));
+		// append conditional code
+		appendCode(compiled, fragments.get(1));
 
-		// At end now.
-		compiled.setCode(endLocation, compiled.getCode().size());
+		// patch now that we know where we end
+		compiled.setCode(patch1, compiled.getCode().size());
 		return true;
 	}
 
+	/** closer to a while statement, (while (predicate) (body)) 
+	 * @param input
+	 * @param t
+	 * @param compiled
+	 * @return
+	 */
 	private boolean handleFor(String input, String t, Compiled compiled)
 	{
 		// Compile all the code...
-		List<Compiled> cc = new ArrayList<Compiled>();
-		for (int i = 0; i < 3; ++i)
+		List<Compiled> fragments = new ArrayList<Compiled>();
+		for (int i = 0; i < 2; ++i)
 		{
 			Compiled c = new Compiled();
-			cc.add (c);
+			fragments.add (c);
 			if ( ! compileLispFragment(mToS.rest(), c))
 				return false;
 //		if (compileLispFragment(d, e, _quiet, codes[2], locs[2]))
@@ -457,56 +467,56 @@ public class LLLCompiler
 		
 		int startLocation = compiled.getCode().size();
 
-		// Push the positive location.
-		int endInsertion = compiled.addPushInstructionWith(0);
-		compiled.addLoc(endInsertion);
+		// setup location to jump around this statement
+		int patch1 = compiled.addPushInstructionWith(0);
+		compiled.addLoc(patch1);
 
-		// First fragment - predicate
-		appendCode(compiled, cc.get(0));
+		// output predicate, it leaves zero/nonzero on stack
+		appendCode(compiled, fragments.get(0));
 
-		// Jump to positive if true.
+		// jump out of this statement if zero on stack
 		compiled.addInstruction(InstructionSet.OpCode.NOT);
 		compiled.addInstruction(InstructionSet.OpCode.JMPI);
 
-		// Second fragment - negative.
-		appendCode(compiled, cc.get(1));
+		// output body
+		appendCode(compiled, fragments.get(1));
 
-		// Jump to end after negative.
+		// jump back to beginning
 		int i = compiled.addPushInstructionWith(startLocation);
 		compiled.addLoc(i);
 		
 		compiled.addInstruction(InstructionSet.OpCode.JMP);
 
-		// At end now.
-		compiled.setCode(endInsertion, compiled.getCode().size());
+		// patch condition now that we know the end
+		compiled.setCode(patch1, compiled.getCode().size());
 		return true;
 	}
 
 	private boolean handleAnd(String input, String t, Compiled compiled)
 	{		
-		List<Compiled> cc = new ArrayList<Compiled>();
+		List<Compiled> fragments = new ArrayList<Compiled>();
 		while (mToS.more ())
 		{
 			Compiled c = new Compiled();
-			cc.add(c);
+			fragments.add(c);
 
 			if ( ! compileLispFragment(mToS.rest(), c))
 				return false;
 		}
 
-		if (cc.size() < 2)
+		if (fragments.size() < 2)
 			return false;
 
 		// last one is empty.
-		cc.remove(cc.size() - 1);
+		fragments.remove(fragments.size() - 1);
 
 		List<Integer> ends = new ArrayList<Integer>();
 
-		if (cc.size() > 1)
+		if (fragments.size() > 1)
 		{
 			compiled.addPushInstructionWith(0);
 
-			for (int i = 1; i < cc.size(); ++i)
+			for (int i = 0; i < fragments.size(); ++i)
 			{
 				// Push the false location.
 				int k = compiled.addPushInstructionWith(0);
@@ -514,7 +524,7 @@ public class LLLCompiler
 				compiled.addLoc(k);
 
 				// Check if true - predicate
-				appendCode(compiled, cc.get(i));	
+				appendCode(compiled, fragments.get(i));	
 
 				// Jump to end...
 				compiled.addInstruction(InstructionSet.OpCode.NOT);
@@ -524,7 +534,7 @@ public class LLLCompiler
 		}
 
 		// Check if true - predicate
-		appendCode(compiled, cc.get(0));
+		appendCode(compiled, fragments.get(0));
 
 		// At end now.
 		for (Integer i: ends)
@@ -535,29 +545,29 @@ public class LLLCompiler
 	
 	private boolean handleOr(String input, String t, Compiled compiled)
 	{
-		List<Compiled> cc = new ArrayList<Compiled>();
+		List<Compiled> fragments = new ArrayList<Compiled>();
 		while (mToS.more ())
 		{
 			Compiled c = new Compiled();
-			cc.add(c);
+			fragments.add(c);
 
 			if (!compileLispFragment(mToS.rest(), c))
 				return false;
 		}
 
-		if (cc.size() < 2)
+		if (fragments.size() < 2)
 			return false;
 
 		// last one is empty.
-		cc.remove(cc.size() - 1);
+		fragments.remove(fragments.size() - 1);
 
 		List<Integer> ends = new ArrayList<Integer>();
 
-		if (cc.size() > 1)
+		if (fragments.size() > 1)
 		{
 			compiled.addPushInstructionWith(1);
 
-			for (int i = 1; i < cc.size(); ++i)
+			for (int i = 0; i < fragments.size(); ++i)
 			{
 				// Push the false location.
 				int k = compiled.addPushInstructionWith(0);
@@ -565,7 +575,7 @@ public class LLLCompiler
 				compiled.addLoc(k);
 
 				// Check if true - predicate
-				appendCode(compiled, cc.get(i));
+				appendCode(compiled, fragments.get(i));
 
 				// Jump to end...
 				compiled.addInstruction(InstructionSet.OpCode.JMPI);
@@ -574,7 +584,7 @@ public class LLLCompiler
 		}
 
 		// Check if true - predicate
-		appendCode(compiled, cc.get(0));
+		appendCode(compiled, fragments.get(0));
 
 		// At end now.
 		for (Integer i: ends)
@@ -590,20 +600,25 @@ public class LLLCompiler
 		{
 			if (exec)
 			{
-				List<Compiled> cc = new ArrayList<Compiled>();
+				List<Compiled> fragments = new ArrayList<Compiled>();
 				{
 					Compiled c = new Compiled();
-					cc.add(c);
+					fragments.add(c);
 					while (mToS.more ()
 							&& compileLispFragment(mToS.rest(), c))
 					{
 						Compiled c1 = new Compiled();
-						cc.add(c1);
+						fragments.add(c1);
 					}
 				}
 				
-				for (Compiled c : cc)
+				// why reverse order, possibly to match change to opcodes
+				for (int i = fragments.size() - 1; i >= 0; --i)
+//				for (int i = 0; i < fragments.size(); ++i)
+				{
+					Compiled c = fragments.get(i);
 					appendCode(compiled, c);
+				}
 				
 				compiled.addInstruction(it);
 			}
@@ -680,25 +695,29 @@ public class LLLCompiler
 			{
 				Compiled c = new Compiled();
 				fragments.add(c);
-				while (mToS.more ()
-						&& compileLispFragment(mToS.rest(), c))
+				while (mToS.more () && compileLispFragment(mToS.rest(), c))
 				{
-					fragments.add(new Compiled());
+					c = new Compiled();
+					fragments.add(c);
 				}
 				
 				fragments.remove(fragments.size() - 1);
 			}
 			
-			int i = fragments.size();
-			if (i > 2)
+			if (fragments.size() > 2)
 			{
 				Log.d(TAG, "Greater than two arguments given to binary operator " + t + "; using first two only.");
 				while (fragments.size () > 2)
 					fragments.remove(fragments.size() - 1);
 			}
 			
-			for (Compiled c : fragments)
+			// why reverse order, possibly to match change to opcodes
+			for (int i = fragments.size() - 1; i >= 0; --i)
+//			for (int i = 0; i < fragments.size(); ++i)
+			{
+				Compiled c = fragments.get(i);
 				appendCode(compiled, c);
+			}
 			
 			if (it == InstructionSet.OpCode.NOT)
 				compiled.addInstruction(InstructionSet.OpCode.EQ);
@@ -714,32 +733,35 @@ public class LLLCompiler
 				{
 					Compiled c = new Compiled();
 					fragments.add(c);
-					while (mToS.more ()
-							&& compileLispFragment(mToS.rest(), c))
+					while (mToS.more ()	&& compileLispFragment(mToS.rest(), c))
 					{
-						fragments.add(new Compiled());
+						c = new Compiled();
+						fragments.add(c);
 					}
 	
 					fragments.remove(fragments.size() - 1);
 				}
 				
-				int i = fragments.size();
-				if (i > 1)
+				if (fragments.size() > 2)
 				{
 					Log.d(TAG, "Greater than one argument given to unary operator " + t + "; using first only.");
 					while (fragments.size () > 1)
 						fragments.remove(fragments.size() - 1);
 				}
 				
-				for (Compiled c : fragments)
+				// why reverse order, possibly to match change to opcodes
+				for (int i = fragments.size() - 1; i >= 0; --i)
+//				for (int i = 0; i < fragments.size(); ++i)
+				{
+					Compiled c = fragments.get(i);
 					appendCode(compiled, c);
+				}
 
 				compiled.addInstruction(it);
 			}
 			else if ( ! mQuiet)
 				Log.d(TAG, "Unknown assembler token " + t);
-		}
-		
+		}		
 	}
 	
 	void appendCode(Compiled compiled, Compiled c)
@@ -757,9 +779,10 @@ public class LLLCompiler
 		{
 			int k = i.mValue.intValue();
 			
-			Log.d(TAG, String.format("appendCode %s (%s)", 
+			Log.d(TAG, String.format("appendCode %s (%s or %d)", 
 					i.toString(),
-					InstructionSet.OpCode.values()[k]));
+					k < InstructionSet.OpCode.values().length ? InstructionSet.OpCode.values()[k] : "n/a",
+					k));
 			
 			compiled.getCode().add(i);
 		}

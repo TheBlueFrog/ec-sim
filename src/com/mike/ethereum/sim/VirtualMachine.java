@@ -65,10 +65,13 @@ public class VirtualMachine
 		if (_n.greaterThan(STACK_SIZE))
 			throw new StackTooSmall(""); 
 	}
-	void require(int i) throws StackTooSmall
+	void require(int i) throws StackTooSmall, StackUnderflowException
 	{
 		if (i > STACK_SIZE)
 			throw new StackTooSmall(""); 
+		
+		if (m_stack.size() < i)
+			throw new StackUnderflowException (String.format("Requires %d items, only %d on stack.", i, m_stack.size()));
 	}
 	
 	private u256 popStack ()
@@ -96,7 +99,7 @@ public class VirtualMachine
 	}
 	
 	public void go(VirtualMachineEnvironment _ext, long _steps) 
-			throws BadInstructionExeption, StackTooSmall, StepsDoneException
+			throws BadInstructionExeption, StackTooSmall, StepsDoneException, StackUnderflowException
 	{
 		boolean stopped = false;
 		while ( ! stopped && (_steps-- > 0))
@@ -184,16 +187,26 @@ public class VirtualMachine
 				pushStack(y.mult(x));
 				break;
 			case SUB:
+				/* updated spec
+				 	SUB -2 +1
+					S[0] := S'[0] + S'[1]
+					assume that should be 
+					S[0] := S'[0] - S'[1]
+				 */
 				require(2);
 				x = popStack();
 				y = popStack();
-				pushStack(y.subtract(x));
+				pushStack(x.subtract(y));
 				break;
 			case DIV:
+				/* updated spec
+			 		SUB -2 +1
+					S[0] := S'[0] / S'[1]
+				 */
 				require(2);
 				x = popStack();
 				y = popStack();
-				pushStack(y.divide(x));	// do floor?
+				pushStack(x.divide(y));	// do floor?
 				break;
 			case SDIV:
 				require(2);
@@ -231,29 +244,42 @@ public class VirtualMachine
 				assert false : "NYI";
 //				m_stack.back() = ~(m_stack.back() - 1);
 				break;
+				
+				/* from redone spec
+						LT -2 +1
+						S[0] := S'[0] < S'[1] ? 1 : 0
+						0x0b: LE -2 +1
+						S[0] := S'[0] <= S'[1] ? 1 : 0
+						0x0c: GT -2 +1
+						S[0] := S'[0] > S'[1] ? 1 : 0
+						0x0d: GE -2 +1
+						S[0] := S'[0] >= S'[1] ? 1 : 0
+						0x0e: EQ -2 +1
+						S[0] := S'[0] == S'[1] ? 1 : 0
+				 */
 			case LT:
 				require(2);
 				x = popStack();
 				y = popStack();
-				pushStack(y.lessThan(x) ? new u256(1) : new u256(0));
+				pushStack(x.lessThan(y) ? new u256(1) : new u256(0));
 				break;
 			case LE:
 				require(2);
 				x = popStack();
 				y = popStack();
-				pushStack(y.lessThanEqual(x) ? new u256(1) : new u256(0));
+				pushStack(x.lessThanEqual(y) ? new u256(1) : new u256(0));
 				break;
 			case GT:
 				require(2);
 				x = popStack();
 				y = popStack();
-				pushStack(y.greaterThan(x) ? new u256(1) : new u256(0));
+				pushStack(x.greaterThan(y) ? new u256(1) : new u256(0));
 				break;
 			case GE:
 				require(2);
 				x = popStack();
 				y = popStack();
-				pushStack(y.greaterThanEqual(x) ? new u256(1) : new u256(0));
+				pushStack(x.greaterThanEqual(y) ? new u256(1) : new u256(0));
 				break;
 			case EQ:
 				require(2);
@@ -264,7 +290,7 @@ public class VirtualMachine
 			case NOT:
 				require(1);
 				x = popStack();
-				pushStack(x.equal(0) ? new u256(0) : new u256(1));
+				pushStack(x.equal(0) ? new u256(1) : new u256(0));
 				break;
 			case MYADDRESS:
 				pushStack(fromAddress(_ext.myAddress.getAddress()));

@@ -1,6 +1,12 @@
 package com.mike.ethereum.sim;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.List;
 
 import com.mike.ethereum.sim.CommonEth.Account;
 import com.mike.ethereum.sim.CommonEth.u256;
@@ -63,10 +69,12 @@ public class Main
 			+ ")",
 		};
 		
-		for (String s : a)
+		for (File f : getInputs(args[0]))
 		{
-			Log.d(TAG, "Compile " + s);
-			u256s memory = x.compileLisp(s, false);
+			Log.d(TAG, "Compile " + f.getPath());
+			
+			byte[] body = readAll(f);
+			u256s memory = x.compileLisp(new String(body), false);
 
 			Log.d(TAG, "Disassembles to\n" + Disassembler.run(memory));
 			
@@ -91,7 +99,41 @@ public class Main
 					contract.getBalance().toString()));
 		}
 	}
-	
+	static private byte[] readAll(File f) 
+	{
+		FileInputStream fis;
+		try 
+		{
+			fis = new FileInputStream (f);
+			byte[] buffer = new byte[(int) f.length()];
+			fis.read(buffer);
+			fis.close();
+			return buffer;
+		}
+		catch (FileNotFoundException e) 
+		{
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		return null;
+	}
+
+	static private List<File> getInputs(String dir) 
+	{
+		List<File> r = new ArrayList<File>();
+		
+		File[] v = new File(dir).listFiles().clone();
+
+		for (File f : v)
+		{
+			if (f.getPath().endsWith(".lll"))
+			{
+				r.add(f);
+			}
+		}
+		return r;
+	}
 
 	static private class Executor 
 	{
@@ -126,7 +168,7 @@ public class Main
 			{
 				vm.go(vme, 10000);
 			} 
-			catch (BadInstructionExeption | StackTooSmall | StepsDoneException e) 
+			catch (BadInstructionExeption | StackTooSmall | StepsDoneException | StackUnderflowException e) 
 			{
 				e.printStackTrace();
 			}
