@@ -495,13 +495,14 @@ public class LLLCompiler
 	private boolean handleAnd(String input, String t, Compiled compiled)
 	{		
 		List<Compiled> fragments = new ArrayList<Compiled>();
-		while (mToS.more ())
+		boolean more = mToS.more ();
+		while (more)
 		{
 			Compiled c = new Compiled();
 			fragments.add(c);
 
 			if ( ! compileLispFragment(mToS.rest(), c))
-				return false;
+				more = false;
 		}
 
 		if (fragments.size() < 2)
@@ -514,29 +515,31 @@ public class LLLCompiler
 
 		if (fragments.size() > 1)
 		{
+			// see with zero (false)
 			compiled.addPushInstructionWith(0);
 
-			for (int i = 0; i < fragments.size(); ++i)
+			for (int i = 1; i < fragments.size(); ++i)
 			{
 				// Push the false location.
 				int k = compiled.addPushInstructionWith(0);
 				ends.add(k);
 				compiled.addLoc(k);
 
-				// Check if true - predicate
-				appendCode(compiled, fragments.get(i));	
+				// output predicate
+				appendCode(compiled, fragments.get(i - 1));	
 
-				// Jump to end...
+				// Jump to end if zero 
 				compiled.addInstruction(InstructionSet.OpCode.NOT);
 				compiled.addInstruction(InstructionSet.OpCode.JMPI);
 			}
+
 			compiled.addInstruction(InstructionSet.OpCode.POP);
 		}
 
-		// Check if true - predicate
-		appendCode(compiled, fragments.get(0));
+		// check if last one is true
+		appendCode(compiled, fragments.get(fragments.size() - 1));
 
-		// At end now.
+		// at end now, patch everyone to go here
 		for (Integer i: ends)
 			compiled.setCode(i, compiled.getCode().size());
 
@@ -546,47 +549,53 @@ public class LLLCompiler
 	private boolean handleOr(String input, String t, Compiled compiled)
 	{
 		List<Compiled> fragments = new ArrayList<Compiled>();
-		while (mToS.more ())
+		boolean more = mToS.more ();
+		while (more)
 		{
 			Compiled c = new Compiled();
 			fragments.add(c);
 
-			if (!compileLispFragment(mToS.rest(), c))
-				return false;
+			if ( ! compileLispFragment(mToS.rest(), c))
+				more = false;
 		}
 
 		if (fragments.size() < 2)
 			return false;
 
-		// last one is empty.
+		// last one is empty drop it
 		fragments.remove(fragments.size() - 1);
 
 		List<Integer> ends = new ArrayList<Integer>();
 
 		if (fragments.size() > 1)
 		{
+			// for each of the terms except the last one
+			
+			// first push non-zero to setup a JMPI
 			compiled.addPushInstructionWith(1);
 
-			for (int i = 0; i < fragments.size(); ++i)
+			for (int i = 1; i < fragments.size(); ++i)
 			{
-				// Push the false location.
+				// save beginning of this block
 				int k = compiled.addPushInstructionWith(0);
 				ends.add(k);
 				compiled.addLoc(k);
 
-				// Check if true - predicate
-				appendCode(compiled, fragments.get(i));
+				// this code block will leave zero/nonzero on tos
+				appendCode(compiled, fragments.get(i - 1));
 
-				// Jump to end...
+				// jump to end if nonzero (true)
 				compiled.addInstruction(InstructionSet.OpCode.JMPI);
 			}
+
+			// gets here if all tests were zero, discard the 1 we pushed before
 			compiled.addInstruction(InstructionSet.OpCode.POP);
 		}
 
-		// Check if true - predicate
-		appendCode(compiled, fragments.get(0));
+		// append the last one, either zero or nonzero
+		appendCode(compiled, fragments.get(fragments.size() - 1));
 
-		// At end now.
+		// at end now, patch everyone to go here
 		for (Integer i: ends)
 			compiled.setCode(i, compiled.getCode().size());
 
