@@ -5,7 +5,6 @@ import java.math.BigInteger;
 import com.mike.ethereum.sim.CommonEth.Account;
 import com.mike.ethereum.sim.CommonEth.u256;
 import com.mike.ethereum.sim.CommonEth.u256s;
-import com.mike.ethereum.sim.InstructionSet.OpCode;
 
 public class Main
 {
@@ -43,7 +42,25 @@ public class Main
 			+ "  )"
 			+ ")",
 			
-"			not being parsed properly",
+			  "(seq"
+			+ "  ;; Stop unless there is at least the fee and the sender has a valid account."
+			+ "	 (unless (and (> (txsender) 0xff) (>= (txvalue) (* 20 (basefee)))) (stop))"
+			+ ""
+			+ "  ;; Check to see if there's at least one argument (i.e. is a withdrawal) and "
+			+ "  ;; if the appropriate fees have been paid for withdrawal."
+			+ "  (if (and (txdatan)"
+			+ "    (>= (txvalue) (* 135 (basefee)))"
+			+ "    (>= (sload (txsender)) (txdata 0)) )"
+			+ "    ;; At least one data item... Withdraw"
+			+ "    (seq"
+			+ "      ;; Subtract the value from the balance of the account"
+			+ "      (sstore (txsender) (- (sload (txsender)) (txdata 0)))"
+			+ "      (mktx (txsender) (txdata 0) 0)"
+			+ "    )"
+			+ "    ;; Else... Deposit"
+			+ "    (sstore (txsender) (+ (sload (txsender)) (- (txvalue) (* 20 (basefee)))) )"
+			+ "  )"
+			+ ")",
 		};
 		
 		for (String s : a)
@@ -51,7 +68,8 @@ public class Main
 			Log.d(TAG, "Compile " + s);
 			u256s memory = x.compileLisp(s, false);
 
-			Log.d(TAG, "Disassembles to " + disassemble(memory));
+			Log.d(TAG, "Disassembles to\n" + Disassembler.run(memory));
+			
 			
 			Account contract = new Account (new u256(new BigInteger("22222222")), new u256(new BigInteger("22222222")));
 			Account sender = new Account (new u256(new BigInteger("11112222")), new u256(new BigInteger("11112222")));
@@ -74,31 +92,6 @@ public class Main
 		}
 	}
 	
-	static String disassemble(u256s memory)
-	{
-		StringBuilder sb = new StringBuilder();
-		int numerics = 0;
-		for (u256 it : memory.getList())
-		{
-			OpCode iit = InstructionSet.OpCode.parse(it.mValue);
-			if ((numerics > 0) || (iit == null) )//|| (u256)(uint)iit->first != n)	// not an instruction or expecting an argument...
-			{
-				if (numerics > 0)
-					numerics--;
-				
-				sb.append("0x")
-					.append(it.mValue.toString(16))
-					.append(" ");
-			}
-			else
-			{
-				InstructionSet.Info info = InstructionSet.c_instructionInfo.get(iit);
-				sb.append(info.name).append(" ");
-				numerics = info.additional;
-			}
-		}
-		return sb.toString();
-	}
 
 	static private class Executor 
 	{
@@ -116,6 +109,8 @@ public class Main
 			vme.setup(contract, sender, amount, data, fs, null, null, 0);
 			
 			execute(contract, sender, amount, data);
+			
+			vme.dumpStorage();
 		}
 	
 		public u256 getFees()

@@ -98,10 +98,15 @@ public class LLLCompiler
 
 	private Input mToS;
 	
-	
+	/**
+	 * collect information as we compile
+	 */
 	private class Compiled
 	{
+		/** output code */
 		u256s o_code = new u256s();
+		
+		/** not sure yet */
 		List<Integer> o_locs = new ArrayList<Integer>();
 		
 		public Compiled ()
@@ -113,18 +118,44 @@ public class LLLCompiler
 			return o_code;
 		}
 
+		/** append an instruction */
 		public void addInstruction(OpCode c) 
 		{
 			o_code.add(c.ordinal());
 		}
-		public void addU256(u256 v) 
+
+		/** PUSH has to have an operand, return offset
+		 * of the location of the operand
+		 */
+		public int addPushInstructionWith(int operand)
 		{
-			o_code.add(v);
+			o_code.add(InstructionSet.OpCode.PUSH.ordinal());
+			int i = o_code.size();
+			o_code.add(operand);
+			return i;
 		}
 
+		public int addPushInstructionWith(u256 operand)
+		{
+			o_code.add(InstructionSet.OpCode.PUSH.ordinal());
+			int i = o_code.size();
+			o_code.add(operand);
+			return i;
+		}
+		
+		public void setCode(int i, int v)
+		{
+			o_code.set(i, v);
+		}
+		
 		public List<Integer> getLocs() 
 		{
 			return o_locs;
+		}
+
+		public void addLoc(int k)
+		{
+			o_locs.add(k);
 		}
 
 	}
@@ -316,8 +347,7 @@ public class LLLCompiler
 			}
 		}
 		
-		compiled.addInstruction (InstructionSet.OpCode.PUSH);
-		compiled.addU256(literalValue);
+		compiled.addPushInstructionWith(literalValue);
 		
 		if (exec)
 			compiled.addInstruction(bareLoad ? InstructionSet.OpCode.SLOAD : InstructionSet.OpCode.SSTORE);
@@ -353,10 +383,8 @@ public class LLLCompiler
 		}
 
 		// Push the positive location.
-		compiled.addInstruction(InstructionSet.OpCode.PUSH);
-		int posLocation = compiled.getCode().size();
-		o_locs.add(posLocation);
-		compiled.addU256(0);
+		int posLocation = compiled.addPushInstructionWith(0);
+		compiled.addLoc(posLocation);
 
 		// First fragment - predicate
 		appendCode(compiled, cc.get(0));
@@ -368,18 +396,16 @@ public class LLLCompiler
 		appendCode(compiled, cc.get(2));
 
 		// Jump to end after negative.
-		compiled.addInstruction(InstructionSet.OpCode.PUSH);
-		int endLocation = compiled.getCode().size();
-		o_locs.add(endLocation);
-		o_code.add(0);
+		int endLocation = compiled.addPushInstructionWith(0);
+		compiled.addLoc(endLocation);
 		compiled.addInstruction(InstructionSet.OpCode.JMP);
 
 		// Third fragment - positive.
-		o_code.set(posLocation, compiled.getCode().size());
+		compiled.setCode(posLocation, compiled.getCode().size());
 		appendCode(compiled, cc.get(1));
 
 		// At end now.
-		o_code.set(endLocation, compiled.getCode().size());
+		compiled.setCode(endLocation, compiled.getCode().size());
 		return true;
 	}
 
@@ -396,10 +422,8 @@ public class LLLCompiler
 		}
 		
 		// Push the positive location.
-		compiled.addInstruction(InstructionSet.OpCode.PUSH);
-		int endLocation = compiled.getCode().size();
-		o_locs.add(endLocation);
-		o_code.add(0);
+		int endLocation = compiled.addPushInstructionWith(0);
+		compiled.addLoc(endLocation);
 
 		// First fragment - predicate
 		appendCode(compiled, cc.get(0));
@@ -413,7 +437,7 @@ public class LLLCompiler
 		appendCode(compiled, cc.get(1));
 
 		// At end now.
-		o_code.set(endLocation, compiled.getCode().size());
+		compiled.setCode(endLocation, compiled.getCode().size());
 		return true;
 	}
 
@@ -434,10 +458,8 @@ public class LLLCompiler
 		int startLocation = compiled.getCode().size();
 
 		// Push the positive location.
-		compiled.addInstruction(InstructionSet.OpCode.PUSH);
-		int endInsertion = compiled.getCode().size();
-		o_locs.add(endInsertion);
-		o_code.add(0);
+		int endInsertion = compiled.addPushInstructionWith(0);
+		compiled.addLoc(endInsertion);
 
 		// First fragment - predicate
 		appendCode(compiled, cc.get(0));
@@ -450,13 +472,13 @@ public class LLLCompiler
 		appendCode(compiled, cc.get(1));
 
 		// Jump to end after negative.
-		compiled.addInstruction(InstructionSet.OpCode.PUSH);
-		o_locs.add(compiled.getCode().size());
-		o_code.add(startLocation);
+		int i = compiled.addPushInstructionWith(startLocation);
+		compiled.addLoc(i);
+		
 		compiled.addInstruction(InstructionSet.OpCode.JMP);
 
 		// At end now.
-		o_code.set(endInsertion, compiled.getCode().size());
+		compiled.setCode(endInsertion, compiled.getCode().size());
 		return true;
 	}
 
@@ -482,16 +504,14 @@ public class LLLCompiler
 
 		if (cc.size() > 1)
 		{
-			compiled.addInstruction(InstructionSet.OpCode.PUSH);
-			o_code.add(0);
+			compiled.addPushInstructionWith(0);
 
 			for (int i = 1; i < cc.size(); ++i)
 			{
 				// Push the false location.
-				compiled.addInstruction(InstructionSet.OpCode.PUSH);
-				ends.add(compiled.getCode().size());
-				o_locs.add(ends.get(ends.size() - 1));
-				o_code.add(0);
+				int k = compiled.addPushInstructionWith(0);
+				ends.add(k);
+				compiled.addLoc(k);
 
 				// Check if true - predicate
 				appendCode(compiled, cc.get(i));	
@@ -508,7 +528,7 @@ public class LLLCompiler
 
 		// At end now.
 		for (Integer i: ends)
-			o_code.set(i, compiled.getCode().size());
+			compiled.setCode(i, compiled.getCode().size());
 
 		return true;
 	}
@@ -535,16 +555,14 @@ public class LLLCompiler
 
 		if (cc.size() > 1)
 		{
-			compiled.addInstruction(InstructionSet.OpCode.PUSH);
-			o_code.add(1);
+			compiled.addPushInstructionWith(1);
 
 			for (int i = 1; i < cc.size(); ++i)
 			{
 				// Push the false location.
-				compiled.addInstruction(InstructionSet.OpCode.PUSH);
-				ends.add(compiled.getCode().size());
-				o_locs.add(ends.get(ends.size() - 1));
-				o_code.add(0);
+				int k = compiled.addPushInstructionWith(0);
+				ends.add(k);
+				compiled.addLoc(k);
 
 				// Check if true - predicate
 				appendCode(compiled, cc.get(i));
@@ -560,7 +578,7 @@ public class LLLCompiler
 
 		// At end now.
 		for (Integer i: ends)
-			o_code.set(i, compiled.getCode().size());
+			compiled.setCode(i, compiled.getCode().size());
 
 		return true;
 	}
@@ -745,6 +763,8 @@ public class LLLCompiler
 			
 			compiled.getCode().add(i);
 		}
+		
+		Log.d(TAG, "After appending code\n" + Disassembler.run(compiled.getCode()));
 	}
 
 

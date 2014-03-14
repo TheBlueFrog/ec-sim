@@ -2,6 +2,7 @@ package com.mike.ethereum.sim;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Map.Entry;
 
 import com.mike.ethereum.sim.CommonEth.Account;
 import com.mike.ethereum.sim.CommonEth.Address;
@@ -11,16 +12,11 @@ import com.mike.ethereum.sim.CommonEth.u256s;
 
 public class VirtualMachineEnvironment 
 {
-//	ExtVMFace(FeeStructure const& _fees, BlockInfo const& _previousBlock, BlockInfo const& _currentBlock, uint _currentNumber):
-//		fees(_fees),
-//		previousBlock(_previousBlock),
-//		currentBlock(_currentBlock),
-//		currentNumber(_currentNumber)
-//	{}
+	private static final String TAG = VirtualMachineEnvironment.class.getSimpleName();
+
 
 	private class BlockInfo
 	{
-		
 	}
 
 	public VirtualMachineEnvironment()
@@ -115,6 +111,20 @@ public class VirtualMachineEnvironment
 	public void payFee(u256 amt) 
 	{
 		myAddress.payFee(amt);
+	}
+
+	public void dumpStorage()
+	{
+		StringBuilder sb = new StringBuilder();
+		sb.append("Storage\n");
+		for (Entry<u256, u256> x : mStorage.entrySet())
+		{
+			sb.append (String.format("%s\n    %s\n",
+					x.getKey().toString(),
+					x.getValue().toString()));
+		}
+		
+		Log.d(TAG, sb.toString());
 	}
 
 
