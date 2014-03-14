@@ -20,13 +20,66 @@ public class CommonEth
 	using Address = h160;
 	using Addresses = h160s;
 */
+	
+	static class Account
+	{
+		private static final String TAG = Account.class.getSimpleName();
+		
+		private u256 mAddress;
+		private u256 mBalance;
+		
+		public Account (u256 address, u256 balance)
+		{
+			mAddress = new u256(address);
+			mBalance = new u256(balance);
+		}
+
+		public u256 getBalance()
+		{
+			return mBalance;
+		}
+
+		public void payFee(u256 amt) 
+		{
+			mBalance = mBalance.subtract(amt);
+			
+			if (mBalance.lessThan(0))
+			{
+				Log.e(TAG,  String.format("OOOOPS, balance of %s has gone negative.", mAddress.toString()));
+			}
+		}
+
+		public u256 getFullAddress() 
+		{
+			return mAddress;
+		}
+		public Address getAddress() 
+		{
+			return new Address(this);
+		}
+	}
+	
 	static class Address
 	{
-		public byte[] mH = new byte[20]; // 160 bits
+		private static final String TAG = Address.class.getSimpleName();
+		
+		private byte[] mH = new byte[20]; // 160 bits
 
-		public Address (u256 i)
+		public Address (Account account)
 		{
-			// take rightmost 160 bits?
+			// from C++ code
+			// Convert from a 256-bit integer stack/memory entry into a 160-bit Address hash.
+			// Currently we just pull out the right (low-order in BE) 160-bits.
+			
+			// take some random chunk?
+			byte[] b = account.getFullAddress().toByteArray();
+			for (int i = 0; i < Math.min(20, b.length); ++i)
+				mH[i] = b[i];
+		}
+		
+		public byte[] getHash()
+		{
+			return mH;
 		}
 	}
 	
@@ -87,6 +140,10 @@ public class CommonEth
 			mValue = new BigInteger(b);
 		}
 
+		public byte[] toByteArray() 
+		{
+			return mValue.toByteArray();
+		}
 		public int intValue()
 		{
 			return mValue.intValue();

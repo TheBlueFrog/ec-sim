@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.mike.ethereum.sim.CommonEth.Account;
 import com.mike.ethereum.sim.CommonEth.Address;
 import com.mike.ethereum.sim.CommonEth.u256;
 
@@ -14,14 +15,14 @@ public class VirtualMachine
 
 	// Convert from a 256-bit integer stack/memory entry into a 160-bit Address hash.
 	// Currently we just pull out the right (low-order in BE) 160-bits.
-	private Address asAddress(u256 _item)
+	private Address asAddress(u256 a)
 	{
-		return new Address (_item);
+		return new Account(a, new u256(0)).getAddress();
 	}
 
 	private u256 fromAddress(Address _a)
 	{
-		return new u256 (_a.mH);
+		return new u256 (_a.getHash());
 	}
 
 	public VirtualMachine ()
@@ -42,7 +43,15 @@ public class VirtualMachine
 	}
 
 	private u256 m_curPC = new u256(0);
-	private u256 m_nextPC = new u256(0);
+//	private u256 m_nextPC = new u256(0);
+	private void incPC()
+	{
+		m_curPC = m_curPC.add(1);
+	}
+	private void setPC(u256 i)
+	{
+		m_curPC = i;
+	}
 	
 	private	long m_stepCount = 0L;
 
@@ -89,60 +98,69 @@ public class VirtualMachine
 	public void go(VirtualMachineEnvironment _ext, long _steps) 
 			throws BadInstructionExeption, StackTooSmall, StepsDoneException
 	{
-		for (boolean stopped = false; 
-				! stopped && (_steps-- > 0); 
-				m_curPC = m_nextPC, m_nextPC = m_curPC.add(1))
+		boolean stopped = false;
+		while ( ! stopped && (_steps-- > 0))
+//				m_curPC = m_nextPC, m_nextPC = m_curPC.add(1))
 		{
 			m_stepCount++;
 
+			boolean mNoIncPC = false;	// instructions that mess with the PC can
+										// defeat the normal increment
+
 			// INSTRUCTION...
 			u256 rawInst = _ext.getStore(m_curPC);
+			
+			Log.d(TAG, String.format ("CurPC %s", m_curPC.toString()));
 			
 			if (rawInst.greaterThan(0xff))
 				throw new BadInstructionExeption("");
 			
 			InstructionSet.OpCode inst = InstructionSet.OpCode.parse(rawInst);
 
-//			// FEES...
-//			long runFee = m_stepCount > 16 ? _ext.fees.m_stepFee.longValue() : 0;
-//			long storeCostDelta = 0;
-//			switch (inst)
-//			{
-//			case InstructionSet.OpCode.SSTORE:
-//				require(2);
-//				if (!_ext.store(m_stack.back()) && m_stack[m_stack.size() - 2])
-//					storeCostDelta += _ext.fees.m_memoryFee;
-//				if (_ext.store(m_stack.back()) && !m_stack[m_stack.size() - 2])
-//					storeCostDelta -= _ext.fees.m_memoryFee;
-//				// continue on to...
-//			case InstructionSet.OpCode.SLOAD:
-//				runFee += _ext.fees.m_dataFee;
-//				break;
-//
-//			case InstructionSet.OpCode.EXTRO:
-//			case InstructionSet.OpCode.BALANCE:
-//				runFee += _ext.fees.m_extroFee;
-//				break;
-//
-//			case InstructionSet.OpCode.MKTX:
-//				runFee += _ext.fees.m_txFee;
-//				break;
-//
-//			case InstructionSet.OpCode.SHA256:
-//			case InstructionSet.OpCode.RIPEMD160:
-//			case InstructionSet.OpCode.ECMUL:
-//			case InstructionSet.OpCode.ECADD:
-//			case InstructionSet.OpCode.ECSIGN:
-//			case InstructionSet.OpCode.ECRECOVER:
-//			case InstructionSet.OpCode.ECVALID:
-//				runFee += _ext.fees.m_cryptoFee;
-//				break;
-//			default:
-//				break;
-//			}
-//			_ext.payFee(runFee + storeCostDelta);
-//			m_runFee += (u256)runFee;
-
+			{
+				// FEES...
+				u256 runFee = m_stepCount > 16 ? _ext.fees.getStepFee() : new u256(0);
+				u256 storeCostDelta = new u256(0);
+				
+				switch (inst)
+				{
+				case SSTORE:
+					require(2);
+	//				if ( ! _ext.store(peekStack(0)) && peekStack(1))	// ?
+						storeCostDelta.add(_ext.fees.getMemoryFee());
+	//				if (_ext.store(m_stack.back()) && !m_stack[m_stack.size() - 2])	// ?
+						storeCostDelta.subtract(_ext.fees.getMemoryFee());
+					// continue on to...
+				case SLOAD:
+					runFee.add(_ext.fees.getDataFee());
+					break;
+	
+				case EXTRO:
+				case BALANCE:
+					runFee.add(_ext.fees.getExtroFee());
+					break;
+	
+				case MKTX:
+					runFee.add(_ext.fees.getTransmitFee());
+					break;
+	
+				case SHA256:
+				case RIPEMD160:
+				case ECMUL:
+				case ECADD:
+				case ECSIGN:
+				case ECRECOVER:
+				case ECVALID:
+					runFee.add(_ext.fees.getCryptoFee());
+					break;
+				default:
+					break;
+				}
+				
+				_ext.payFee(runFee.add(storeCostDelta));
+//				m_runFee += (u256)runFee;
+			}
+			
 			u256 x;
 			u256 y;
 			
@@ -156,26 +174,26 @@ public class VirtualMachine
 				require(2);
 				x = popStack();
 				y = popStack();
-				pushStack(x.add(y));
+				pushStack(y.add(x));
 				break;
 			case MUL:
 				//pops two items and pushes S[-1] * S[-2] mod 2^256.
 				require(2);
 				x = popStack();
 				y = popStack();
-				pushStack(x.mult(y));
+				pushStack(y.mult(x));
 				break;
 			case SUB:
 				require(2);
 				x = popStack();
 				y = popStack();
-				pushStack(x.subtract(y));
+				pushStack(y.subtract(x));
 				break;
 			case DIV:
 				require(2);
 				x = popStack();
 				y = popStack();
-				pushStack(x.divide(y));
+				pushStack(y.divide(x));	// do floor?
 				break;
 			case SDIV:
 				require(2);
@@ -187,7 +205,7 @@ public class VirtualMachine
 				require(2);
 				x = popStack();
 				y = popStack();
-				pushStack(x.mod(y));
+				pushStack(y.mod(x));
 				break;
 			case SMOD:
 				require(2);
@@ -217,25 +235,25 @@ public class VirtualMachine
 				require(2);
 				x = popStack();
 				y = popStack();
-				pushStack(x.lessThan(y) ? new u256(1) : new u256(0));
+				pushStack(y.lessThan(x) ? new u256(1) : new u256(0));
 				break;
 			case LE:
 				require(2);
 				x = popStack();
 				y = popStack();
-				pushStack(x.lessThanEqual(y) ? new u256(1) : new u256(0));
+				pushStack(y.lessThanEqual(x) ? new u256(1) : new u256(0));
 				break;
 			case GT:
 				require(2);
 				x = popStack();
 				y = popStack();
-				pushStack(x.greaterThan(y) ? new u256(1) : new u256(0));
+				pushStack(y.greaterThan(x) ? new u256(1) : new u256(0));
 				break;
 			case GE:
 				require(2);
 				x = popStack();
 				y = popStack();
-				pushStack(x.greaterThanEqual(y) ? new u256(1) : new u256(0));
+				pushStack(y.greaterThanEqual(x) ? new u256(1) : new u256(0));
 				break;
 			case EQ:
 				require(2);
@@ -249,10 +267,10 @@ public class VirtualMachine
 				pushStack(x.equal(0) ? new u256(0) : new u256(1));
 				break;
 			case MYADDRESS:
-				pushStack(fromAddress(_ext.myAddress));
+				pushStack(fromAddress(_ext.myAddress.getAddress()));
 				break;
 			case TXSENDER:
-				pushStack(fromAddress(_ext.txSender));
+				pushStack(fromAddress(_ext.txSender.getAddress()));
 				break;
 			case TXVALUE:
 				pushStack(_ext.txValue);
@@ -292,7 +310,7 @@ public class VirtualMachine
 //				m_stack.push_back(_ext.previousBlock.nonce);
 				break;
 			case BASEFEE:
-				pushStack(_ext.fees.multiplier());
+				pushStack(_ext.fees.getStepFee());
 				break;
 			case SHA256:
 			{
@@ -478,9 +496,9 @@ public class VirtualMachine
 //				m_stack.push_back(fromBigEndian<u256>(final));
 				break;
 			}
-			case PUSH:
-				pushStack(_ext.getStore(m_curPC.add(1)));
-				m_nextPC = m_curPC.add(2);
+			case PUSH:								// like a load immediate, extra instruction
+				incPC ();
+				pushStack(_ext.getStore(m_curPC));
 				break;
 			case POP:
 				require(1);
@@ -522,8 +540,8 @@ public class VirtualMachine
 				nextPC = curPC + 2;
 				break;
 			}*/
-			case MLOAD:
-			{
+			case MLOAD:								// pops two items and sets the item in memory at index S[-1] to S[-2]
+			{										// thats wrong - pop Adress, push item in memory at Address
 				require(1);
 //	#ifdef __clang__
 //				auto mFinder = m_temp.find(m_stack.back());
@@ -537,7 +555,7 @@ public class VirtualMachine
 //	#endif
 				break;
 			}
-			case MSTORE:
+			case MSTORE:							// pops two items and sets the item in memory at index S[-1] to S[-2]
 			{
 				require(2);
 //	#ifdef __clang__
@@ -553,29 +571,33 @@ public class VirtualMachine
 //	#endif
 				break;
 			}
-			case SLOAD:
-				require(1);
+			case SLOAD:								// spec says - pops two items and sets the item in storage at index S[-1] to S[-2]
+				require(1);							// that's wrong,  pop Address and get item in storage at Address and push on stack 
 				x = popStack();
 				pushStack(_ext.getStore(x));
 				break;
-			case SSTORE:
+			case SSTORE:							// pops two items and sets the item in storage at index S[-1] to S[-2]
 				require(2);
 				x = popStack();
 				y = popStack();
 				_ext.setStore(x, y);
 				break;
-			case JMP:
+			case JMP:								// pops one item and sets the index pointer (PC) to S[-1]
 				require(1);
-				m_nextPC = popStack();
+				setPC(popStack());
+				mNoIncPC = true;
 				break;
-			case JMPI:
+			case JMPI:  							// JMPI - pops two items and sets the index pointer (PC) to S[-2] only if S[-1] is nonzero
 				require(2);
 				x = popStack();
 				y = popStack();
 				if ( ! x.equal(0))
-					m_nextPC = y;
+				{
+					setPC(y);
+					mNoIncPC = true;
+				}
 				break;
-			case IND:
+			case IND:								//  IND - pushes the index pointer (PC)
 				pushStack(m_curPC);
 				break;
 			case EXTRO:
@@ -632,10 +654,14 @@ public class VirtualMachine
 				throw new BadInstructionExeption("Unknown opcode " + inst.toString());
 			}
 			
+			if ( ! mNoIncPC)
+				incPC();
+			
 			dumpStack();
 		}
 		
 		if (_steps == -1)
 			throw new StepsDoneException("Ran out of steps");
 	}
+
 }

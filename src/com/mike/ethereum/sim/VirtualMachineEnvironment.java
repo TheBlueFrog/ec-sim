@@ -3,6 +3,7 @@ package com.mike.ethereum.sim;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.mike.ethereum.sim.CommonEth.Account;
 import com.mike.ethereum.sim.CommonEth.Address;
 import com.mike.ethereum.sim.CommonEth.u256;
 import com.mike.ethereum.sim.CommonEth.u256s;
@@ -34,10 +35,14 @@ public class VirtualMachineEnvironment
 		for (int i = 0; i < memory.size(); ++i)
 			mStorage.put(new u256(i), memory.get(i));
 	}
+	public int getContractSize ()
+	{
+		return mStorage.size();
+	}
 	
 	public void setup(
-			Address _myAddress, 
-			Address _txSender, 
+			Account _myAddress, 
+			Account _txSender, 
 			u256 _txValue, 
 			u256s _txData, 
 			FeeStructure _fees, 
@@ -59,13 +64,17 @@ public class VirtualMachineEnvironment
 	
 	/**
 	 * where we keep the running program
+	 * and persisted state for the contract
 	 * 
-	 * @param _n
-	 * @return
+	 * @param address
+	 * @return	value at the address or zero if not set
 	 */
 	public u256 getStore(u256 address) 
 	{
-		return mStorage.get(address);
+		if (mStorage.containsKey(address))
+			return mStorage.get(address);
+		else
+			return new u256(0);
 	}
 	
 	void setStore(u256 _n, u256 _v)
@@ -74,15 +83,11 @@ public class VirtualMachineEnvironment
 	}
 	
 //	void mktx(Transaction& _t) {}
-//	u256 balance(Address _a) { return 0; }
-//	void payFee(bigint _fee) {}
 //	u256 txCount(Address _a) { return 0; }
-//	u256 extro(Address _a, u256 _pos) { return 0; }
 //	u256 extroPrice(Address _a) { return 0; }
-//	void suicide(Address _a) {}
 
-	Address myAddress;
-	Address txSender;
+	Account myAddress;
+	Account txSender;
 	u256 txValue;
 	u256s txData;
 	FeeStructure fees;
@@ -105,6 +110,11 @@ public class VirtualMachineEnvironment
 	public void suicide(Address dest) 
 	{
 		assert false : "NYI";
+	}
+
+	public void payFee(u256 amt) 
+	{
+		myAddress.payFee(amt);
 	}
 
 

@@ -11,6 +11,7 @@ import org.javatuples.Pair;
 
 import com.mike.ethereum.sim.CommonEth.u256;
 import com.mike.ethereum.sim.CommonEth.u256s;
+import com.mike.ethereum.sim.InstructionSet.OpCode;
 
 public class LLLCompiler
 {
@@ -86,19 +87,50 @@ public class LLLCompiler
 		
 //		char const* d = _code.data();
 //		char const* e = _code.data() + _code.size();
-		u256s o_code = new u256s();
-		List<Integer> o_locs = new ArrayList<Integer>();
+		Compiled c = new Compiled();
 		
-		compileLispFragment(_code, o_code, o_locs);
+		compileLispFragment(_code, c);
 		
-		return o_code;
+		return c.getCode();
 	}
 
 	private String c_allowed = "+-*/%<>=!";
 
 	private Input mToS;
 	
-	private boolean compileLispFragment (String input, u256s o_code, List<Integer> o_locs)
+	
+	private class Compiled
+	{
+		u256s o_code = new u256s();
+		List<Integer> o_locs = new ArrayList<Integer>();
+		
+		public Compiled ()
+		{
+		}
+
+		public u256s getCode()
+		{
+			return o_code;
+		}
+
+		public void addInstruction(OpCode c) 
+		{
+			o_code.add(c.ordinal());
+		}
+		public void addU256(u256 v) 
+		{
+			o_code.add(v);
+		}
+
+		public List<Integer> getLocs() 
+		{
+			return o_locs;
+		}
+
+	}
+
+
+	private boolean compileLispFragment (String input, Compiled compiled)
 	{
 		mInput.push(new Input(input));
 		mToS = mInput.peek();
@@ -150,8 +182,8 @@ public class LLLCompiler
 									literalValue = readNumeric(token);
 								
 								if (literalValue != null)
-									handleBareLoad(input, token, o_code, o_locs, exec, literalValue);
-								else if ( ! handleKeywordOpCode (input, token, o_code, o_locs, exec))
+									handleBareLoad(input, token, compiled, exec, literalValue);
+								else if ( ! handleKeywordOpCode (input, token, compiled, exec))
 									break;							
 							}
 						}
@@ -220,102 +252,100 @@ public class LLLCompiler
 			mToS.next(); 
 	}
 
-	private boolean handleKeywordOpCode(String input, String t, u256s o_code, List<Integer> o_locs, boolean exec)
+	private boolean handleKeywordOpCode(String input, String t, Compiled compiled, boolean exec)
 	{
 		t = t.toUpperCase();
 
 		if ("IF".equals (t)) 
 		{
-			if ( ! handleIf(input, t, o_code, o_locs))
+			if ( ! handleIf(input, t, compiled))
 				return false;
 		}
 		else if (("WHEN".equals (t)) || "UNLESS".equals (t))
 		{
-			if ( ! handleWhen(input, t, o_code, o_locs))
+			if ( ! handleWhen(input, t, compiled))
 				return false;
 		}
 		else if ("FOR".equals (t)) 
 		{
-			if ( ! handleFor(input, t, o_code, o_locs))
+			if ( ! handleFor(input, t, compiled))
 				return false;
 		}
 		else if ("SEQ".equals (t))
 		{
-			if ( ! handleSeq(input, t, o_code, o_locs))
+			if ( ! handleSeq(input, t, compiled))
 				return false;
 		}
 		else if ("AND".equals (t))
 		{
-			if ( ! handleAnd(input, t, o_code, o_locs))
+			if ( ! handleAnd(input, t, compiled))
 				return false;
 		}
 		else if ("OR".equals (t))
 		{
-			if ( ! handleOr (input, t, o_code, o_locs))
+			if ( ! handleOr (input, t, compiled))
 				return false;
 		}
-		else if ( ! handleOpCode (input, t, o_code, o_locs, exec))
+		else if ( ! handleOpCode (input, t, compiled, exec))
 		{
-			if ( ! handleArith(input, t, o_code, o_locs))
+			if ( ! handleArith(input, t, compiled))
 			{
-				handleUnaryBinary (input, t, o_code, o_locs);
+				handleUnaryBinary (input, t, compiled);
 			}
 		}
 		
 		return true;
 	}
 
-	private void handleBareLoad(String input, String t, u256s o_code, List<Integer> o_locs, boolean exec, u256 literalValue)
+	private void handleBareLoad(String input, String t, Compiled compiled, boolean exec, u256 literalValue)
 	{
 		boolean bareLoad = true;
 		if (exec)
 		{
-			u256s codes = new u256s();
-			List<Integer> locs = new ArrayList<Integer>();
+			Compiled c = new Compiled();
 			
-			if (compileLispFragment(mToS.rest(), codes, locs))
+			if (compileLispFragment(mToS.rest(), c))
 			{
-				appendCode(o_code, o_locs, codes, locs);
+				appendCode(compiled, c);
 				
-				while (compileLispFragment(mToS.rest(), codes, locs))
+				while (compileLispFragment(mToS.rest(), c))
 					if (! mQuiet)
 						Log.e(TAG, "Additional items in bare store. Ignoring.");
 
 				bareLoad = false;
 			}
 		}
-		o_code.add(InstructionSet.OpCode.PUSH.ordinal());
-		o_code.add(literalValue);
+		
+		compiled.addInstruction (InstructionSet.OpCode.PUSH);
+		compiled.addU256(literalValue);
+		
 		if (exec)
-			o_code.add(bareLoad ? InstructionSet.OpCode.SLOAD.ordinal() : InstructionSet.OpCode.SSTORE.ordinal());
+			compiled.addInstruction(bareLoad ? InstructionSet.OpCode.SLOAD : InstructionSet.OpCode.SSTORE);
 	}
 
-	private boolean handleSeq(String input, String t, u256s o_code, List<Integer> o_locs)
+	private boolean handleSeq(String input, String t, Compiled compiled)
 	{
 		while (mToS.more ())
 		{
-			u256s codes = new u256s();
-			List<Integer> locs = new ArrayList<Integer>();
-			if (compileLispFragment(mToS.rest(), codes, locs))
-				appendCode(o_code, o_locs, codes, locs);
+			Compiled c = new Compiled();
+			if (compileLispFragment(mToS.rest(), c))
+				appendCode(compiled, c);
 			else
 				return false;
 		}
 		return true;
 	}
 
-	private boolean handleIf(String input, String t, u256s o_code, List<Integer> o_locs)
+	private boolean handleIf(String input, String t, Compiled compiled)
 	{
 		// Compile all the code...
-		List<u256s> codes = new ArrayList<u256s>();
-		List<List<Integer>> locs = new ArrayList<List<Integer>>();
+		List<Compiled> cc = new ArrayList<Compiled>();
 		for (int i = 0; i < 4; ++i)
 		{
-			u256s c = new u256s();
-			List<Integer> ll = new ArrayList<Integer>();
-			codes.add (c);
-			locs.add(ll);
-			if ( ! compileLispFragment(mToS.rest(), c, ll))
+			Compiled c = new Compiled();
+			cc.add (c);
+
+			if ( ! compileLispFragment(mToS.rest(), c))
 				return false;
 
 //			if (compileLispFragment(input.substring(d), _quiet, codes[3], locs[3]))
@@ -323,251 +353,246 @@ public class LLLCompiler
 		}
 
 		// Push the positive location.
-		o_code.add(InstructionSet.OpCode.PUSH.ordinal());
-		int posLocation = o_code.size();
+		compiled.addInstruction(InstructionSet.OpCode.PUSH);
+		int posLocation = compiled.getCode().size();
 		o_locs.add(posLocation);
-		o_code.add(0);
+		compiled.addU256(0);
 
 		// First fragment - predicate
-		appendCode(o_code, o_locs, codes.get(0), locs.get(0));
+		appendCode(compiled, cc.get(0));
 
 		// Jump to positive if true.
-		o_code.add(InstructionSet.OpCode.JMPI.ordinal());
+		compiled.addInstruction(InstructionSet.OpCode.JMPI);
 
 		// Second fragment - negative.
-		appendCode(o_code, o_locs, codes.get(2), locs.get(2));
+		appendCode(compiled, cc.get(2));
 
 		// Jump to end after negative.
-		o_code.add(InstructionSet.OpCode.PUSH.ordinal());
-		int endLocation = o_code.size();
+		compiled.addInstruction(InstructionSet.OpCode.PUSH);
+		int endLocation = compiled.getCode().size();
 		o_locs.add(endLocation);
 		o_code.add(0);
-		o_code.add(InstructionSet.OpCode.JMP.ordinal());
+		compiled.addInstruction(InstructionSet.OpCode.JMP);
 
 		// Third fragment - positive.
-		o_code.set(posLocation, o_code.size());
-		appendCode(o_code, o_locs, codes.get(1), locs.get(1));
+		o_code.set(posLocation, compiled.getCode().size());
+		appendCode(compiled, cc.get(1));
 
 		// At end now.
-		o_code.set(endLocation, o_code.size());
+		o_code.set(endLocation, compiled.getCode().size());
 		return true;
 	}
 
-	private boolean handleWhen(String input, String t, u256s o_code, List<Integer> o_locs)
+	private boolean handleWhen(String input, String t, Compiled compiled)
 	{
 		// Compile all the code...
-		List<u256s> codes = new ArrayList<u256s>();
-		List<List<Integer>> locs = new ArrayList<List<Integer>>();
+		List<Compiled> cc = new ArrayList<Compiled>();
 		for (int i = 0; i < 2; ++i)
 		{
-			u256s c = new u256s();
-			List<Integer> ll = new ArrayList<Integer>();
-			codes.add (c);
-			locs.add(ll);
-			if ( ! compileLispFragment(mToS.rest(), c, ll))
+			Compiled c = new Compiled();
+			cc.add (c);
+			if ( ! compileLispFragment(mToS.rest(), c))
 				return false;
 		}
 		
 		// Push the positive location.
-		o_code.add(InstructionSet.OpCode.PUSH.ordinal());
-		int endLocation = o_code.size();
+		compiled.addInstruction(InstructionSet.OpCode.PUSH);
+		int endLocation = compiled.getCode().size();
 		o_locs.add(endLocation);
 		o_code.add(0);
 
 		// First fragment - predicate
-		appendCode(o_code, o_locs, codes.get(0), locs.get(0));
+		appendCode(compiled, cc.get(0));
 
 		// Jump to end...
 		if (t == "WHEN")
-			o_code.add(InstructionSet.OpCode.NOT.ordinal());
-		o_code.add(InstructionSet.OpCode.JMPI.ordinal());
+			compiled.addInstruction(InstructionSet.OpCode.NOT);
+		compiled.addInstruction(InstructionSet.OpCode.JMPI);
 
 		// Second fragment - negative.
-		appendCode(o_code, o_locs, codes.get(1), locs.get(1));
+		appendCode(compiled, cc.get(1));
 
 		// At end now.
-		o_code.set(endLocation, o_code.size());
+		o_code.set(endLocation, compiled.getCode().size());
 		return true;
 	}
 
-	private boolean handleFor(String input, String t, u256s o_code, List<Integer> o_locs)
+	private boolean handleFor(String input, String t, Compiled compiled)
 	{
 		// Compile all the code...
-		List<u256s> codes = new ArrayList<u256s>();
-		List<List<Integer>> locs = new ArrayList<List<Integer>>();
+		List<Compiled> cc = new ArrayList<Compiled>();
 		for (int i = 0; i < 3; ++i)
 		{
-			u256s c = new u256s();
-			List<Integer> ll = new ArrayList<Integer>();
-			codes.add (c);
-			locs.add(ll);
-			if ( ! compileLispFragment(mToS.rest(), c, ll))
+			Compiled c = new Compiled();
+			cc.add (c);
+			if ( ! compileLispFragment(mToS.rest(), c))
 				return false;
 //		if (compileLispFragment(d, e, _quiet, codes[2], locs[2]))
 //			return false;
 		}
 		
-		int startLocation = o_code.size();
+		int startLocation = compiled.getCode().size();
 
 		// Push the positive location.
-		o_code.add(InstructionSet.OpCode.PUSH.ordinal());
-		int endInsertion = o_code.size();
+		compiled.addInstruction(InstructionSet.OpCode.PUSH);
+		int endInsertion = compiled.getCode().size();
 		o_locs.add(endInsertion);
 		o_code.add(0);
 
 		// First fragment - predicate
-		appendCode(o_code, o_locs, codes.get(0), locs.get(0));
+		appendCode(compiled, cc.get(0));
 
 		// Jump to positive if true.
-		o_code.add(InstructionSet.OpCode.NOT.ordinal());
-		o_code.add(InstructionSet.OpCode.JMPI.ordinal());
+		compiled.addInstruction(InstructionSet.OpCode.NOT);
+		compiled.addInstruction(InstructionSet.OpCode.JMPI);
 
 		// Second fragment - negative.
-		appendCode(o_code, o_locs, codes.get(1), locs.get(1));
+		appendCode(compiled, cc.get(1));
 
 		// Jump to end after negative.
-		o_code.add(InstructionSet.OpCode.PUSH.ordinal());
-		o_locs.add(o_code.size());
+		compiled.addInstruction(InstructionSet.OpCode.PUSH);
+		o_locs.add(compiled.getCode().size());
 		o_code.add(startLocation);
-		o_code.add(InstructionSet.OpCode.JMP.ordinal());
+		compiled.addInstruction(InstructionSet.OpCode.JMP);
 
 		// At end now.
-		o_code.set(endInsertion, o_code.size());
+		o_code.set(endInsertion, compiled.getCode().size());
 		return true;
 	}
 
-	private boolean handleAnd(String input, String t, u256s o_code, List<Integer> o_locs)
+	private boolean handleAnd(String input, String t, Compiled compiled)
 	{		
-		u256s codes = new u256s();
-		List<Integer> locs = new ArrayList<Integer>();
+		List<Compiled> cc = new ArrayList<Compiled>();
 		while (mToS.more ())
 		{
-//			codes.resize(codes.size() + 1);
-//			locs.resize(locs.size() + 1);
-			if ( ! compileLispFragment(mToS.rest(), codes, locs))
+			Compiled c = new Compiled();
+			cc.add(c);
+
+			if ( ! compileLispFragment(mToS.rest(), c))
 				return false;
 		}
 
-		// last one is empty.
-		if (codes.size() < 2)
+		if (cc.size() < 2)
 			return false;
 
-		codes.removeLast();
-		locs.remove(locs.size() - 1);
+		// last one is empty.
+		cc.remove(cc.size() - 1);
 
 		List<Integer> ends = new ArrayList<Integer>();
 
-		if (codes.size() > 1)
+		if (cc.size() > 1)
 		{
-			o_code.add(InstructionSet.OpCode.PUSH.ordinal());
+			compiled.addInstruction(InstructionSet.OpCode.PUSH);
 			o_code.add(0);
 
-			for (int i = 1; i < codes.size(); ++i)
+			for (int i = 1; i < cc.size(); ++i)
 			{
 				// Push the false location.
-				o_code.add(InstructionSet.OpCode.PUSH.ordinal());
-				ends.add(o_code.size());
+				compiled.addInstruction(InstructionSet.OpCode.PUSH);
+				ends.add(compiled.getCode().size());
 				o_locs.add(ends.get(ends.size() - 1));
 				o_code.add(0);
 
 				// Check if true - predicate
-				appendCode(o_code, o_locs, codes, locs);	// -1 thing
+				appendCode(compiled, cc.get(i));	
 
 				// Jump to end...
-				o_code.add(InstructionSet.OpCode.NOT.ordinal());
-				o_code.add(InstructionSet.OpCode.JMPI.ordinal());
+				compiled.addInstruction(InstructionSet.OpCode.NOT);
+				compiled.addInstruction(InstructionSet.OpCode.JMPI);
 			}
-			o_code.add(InstructionSet.OpCode.POP.ordinal());
+			compiled.addInstruction(InstructionSet.OpCode.POP);
 		}
 
 		// Check if true - predicate
-		appendCode(o_code, o_locs, codes, locs); // -1 thing
+		appendCode(compiled, cc.get(0));
 
 		// At end now.
 		for (Integer i: ends)
-			o_code.set(i, o_code.size());
+			o_code.set(i, compiled.getCode().size());
 
 		return true;
 	}
 	
-	private boolean handleOr(String input, String t, u256s o_code, List<Integer> o_locs)
+	private boolean handleOr(String input, String t, Compiled compiled)
 	{
-		u256s codes = new u256s();
-		List<Integer> locs = new ArrayList<Integer>();
+		List<Compiled> cc = new ArrayList<Compiled>();
 		while (mToS.more ())
 		{
-//			codes.resize(codes.size() + 1);
-//			locs.resize(locs.size() + 1);
-			if (!compileLispFragment(mToS.rest(), codes, locs))
+			Compiled c = new Compiled();
+			cc.add(c);
+
+			if (!compileLispFragment(mToS.rest(), c))
 				return false;
 		}
 
-		// last one is empty.
-		if (codes.size() < 2)
+		if (cc.size() < 2)
 			return false;
 
-		codes.removeLast();
-		locs.remove(locs.size() - 1);
+		// last one is empty.
+		cc.remove(cc.size() - 1);
 
 		List<Integer> ends = new ArrayList<Integer>();
 
-		if (codes.size() > 1)
+		if (cc.size() > 1)
 		{
-			o_code.add(InstructionSet.OpCode.PUSH.ordinal());
+			compiled.addInstruction(InstructionSet.OpCode.PUSH);
 			o_code.add(1);
 
-			for (int i = 1; i < codes.size(); ++i)
+			for (int i = 1; i < cc.size(); ++i)
 			{
 				// Push the false location.
-				o_code.add(InstructionSet.OpCode.PUSH.ordinal());
-				ends.add(o_code.size());
+				compiled.addInstruction(InstructionSet.OpCode.PUSH);
+				ends.add(compiled.getCode().size());
 				o_locs.add(ends.get(ends.size() - 1));
 				o_code.add(0);
 
 				// Check if true - predicate
-				appendCode(o_code, o_locs, codes, locs);	// something about -1
+				appendCode(compiled, cc.get(i));
 
 				// Jump to end...
-				o_code.add(InstructionSet.OpCode.JMPI.ordinal());
+				compiled.addInstruction(InstructionSet.OpCode.JMPI);
 			}
-			o_code.add(InstructionSet.OpCode.POP.ordinal());
+			compiled.addInstruction(InstructionSet.OpCode.POP);
 		}
 
 		// Check if true - predicate
-		appendCode(o_code, o_locs, codes, locs);	// and here
+		appendCode(compiled, cc.get(0));
 
 		// At end now.
 		for (Integer i: ends)
-			o_code.set(i, o_code.size());
+			o_code.set(i, compiled.getCode().size());
 
 		return true;
 	}
 	
-	private boolean handleOpCode (String input, String t, u256s o_code, List<Integer> o_locs, boolean exec)
+	private boolean handleOpCode (String input, String t, Compiled compiled, boolean exec)
 	{
 		InstructionSet.OpCode it = InstructionSet.OpCode.parse(t);
 		if (it != null)
 		{
 			if (exec)
 			{
-				List<Pair<u256s, List<Integer>>> fragments = new ArrayList<Pair<u256s, List<Integer>>>();
-				Pair<u256s, List<Integer>> p = new Pair<u256s, List<Integer>>(new u256s(), new ArrayList<Integer>());
-				fragments.add(p);
-				while (mToS.more ()
-						&& compileLispFragment(mToS.rest(), p.getValue0(), p.getValue1()))
+				List<Compiled> cc = new ArrayList<Compiled>();
 				{
-					p = new Pair<u256s, List<Integer>>(new u256s(), new ArrayList<Integer>());
-					fragments.add(p);
+					Compiled c = new Compiled();
+					cc.add(c);
+					while (mToS.more ()
+							&& compileLispFragment(mToS.rest(), c))
+					{
+						Compiled c1 = new Compiled();
+						cc.add(c1);
+					}
 				}
-
-				for (Pair<u256s, List<Integer>> c : fragments)
-					appendCode(o_code, o_locs, c.getValue0(), c.getValue1());
-				o_code.add(it.ordinal());
+				
+				for (Compiled c : cc)
+					appendCode(compiled, c);
+				
+				compiled.addInstruction(it);
 			}
 			else
 			{
-				o_code.add(InstructionSet.OpCode.PUSH.ordinal());
-				o_code.add(it.ordinal());
+				compiled.addInstruction(InstructionSet.OpCode.PUSH);
+				compiled.addInstruction(it);
 			}
 			
 			return true;
@@ -586,7 +611,7 @@ public class LLLCompiler
 		c_arith.put("%", InstructionSet.OpCode.MOD);
 	};
 
-	private boolean handleArith(String input, String t, u256s o_code, List<Integer> o_locs)
+	private boolean handleArith(String input, String t, Compiled compiled)
 	{
 		InstructionSet.OpCode it = c_arith.get(t);
 		if (it != null)
@@ -594,13 +619,12 @@ public class LLLCompiler
 			int i = 0;
 			while (mToS.more ())
 			{
-				u256s codes = new u256s();
-				List<Integer> locs = new ArrayList<Integer>();
-				if (compileLispFragment(mToS.rest(), codes, locs))
+				Compiled c = new Compiled();
+				if (compileLispFragment(mToS.rest(), c))
 				{
-					appendCode(o_code, o_locs, codes, locs);
+					appendCode(compiled, c);
 					if (i != 0)
-						o_code.add(it.ordinal());
+						compiled.addInstruction(it);
 					++i;
 				}
 				else
@@ -629,60 +653,70 @@ public class LLLCompiler
 		c_unary.put("!", InstructionSet.OpCode.NOT);
 	};
 	
-	void handleUnaryBinary (String input, String t, u256s o_code, List<Integer> o_locs)
+	void handleUnaryBinary (String input, String t, Compiled compiled)
 	{
 		InstructionSet.OpCode it = c_binary.get(t);
 		if (it != null)
 		{
-			List<Pair<u256s, List<Integer>>> fragments = new ArrayList<Pair<u256s, List<Integer>>>();
-			Pair<u256s, List<Integer>> p = new Pair<u256s, List<Integer>>(new u256s(), new ArrayList<Integer>());
-			fragments.add(p);
-			while (mToS.more ()
-					&& compileLispFragment(mToS.rest(), p.getValue0(), p.getValue1()))
+			List<Compiled> fragments = new ArrayList<Compiled>();
 			{
-				p = new Pair<u256s, List<Integer>>(new u256s(), new ArrayList<Integer>());
-				fragments.add(p);
+				Compiled c = new Compiled();
+				fragments.add(c);
+				while (mToS.more ()
+						&& compileLispFragment(mToS.rest(), c))
+				{
+					fragments.add(new Compiled());
+				}
+				
+				fragments.remove(fragments.size() - 1);
 			}
-			
-			fragments.remove(fragments.size() - 1);
 			
 			int i = fragments.size();
 			if (i > 2)
+			{
 				Log.d(TAG, "Greater than two arguments given to binary operator " + t + "; using first two only.");
+				while (fragments.size () > 2)
+					fragments.remove(fragments.size() - 1);
+			}
 			
-			for (Pair<u256s, List<Integer>> c : fragments)
-				if (--i < 2)
-					appendCode(o_code, o_locs, c.getValue0(), c.getValue1());
+			for (Compiled c : fragments)
+				appendCode(compiled, c);
 			
 			if (it == InstructionSet.OpCode.NOT)
-				o_code.add(InstructionSet.OpCode.EQ.ordinal());
-			o_code.add(it.ordinal());
+				compiled.addInstruction(InstructionSet.OpCode.EQ);
+
+			compiled.addInstruction(it);
 		}
 		else
 		{
 			it = c_unary.get(t);
 			if (it != null)
 			{
-				List<Pair<u256s, List<Integer>>> fragments = new ArrayList<Pair<u256s, List<Integer>>>();
-				Pair<u256s, List<Integer>> p = new Pair<u256s, List<Integer>>(new u256s(), new ArrayList<Integer>());
-				fragments.add(p);
-				while (mToS.more ()
-						&& compileLispFragment(mToS.rest(), p.getValue0(), p.getValue1()))
+				List<Compiled> fragments = new ArrayList<Compiled>();
 				{
-					p = new Pair<u256s, List<Integer>>(new u256s(), new ArrayList<Integer>());
-					fragments.add(p);
+					Compiled c = new Compiled();
+					fragments.add(c);
+					while (mToS.more ()
+							&& compileLispFragment(mToS.rest(), c))
+					{
+						fragments.add(new Compiled());
+					}
+	
+					fragments.remove(fragments.size() - 1);
 				}
-
-				fragments.remove(fragments.size() - 1);
 				
 				int i = fragments.size();
 				if (i > 1)
+				{
 					Log.d(TAG, "Greater than one argument given to unary operator " + t + "; using first only.");
+					while (fragments.size () > 1)
+						fragments.remove(fragments.size() - 1);
+				}
 				
-				for (Pair<u256s, List<Integer>> c : fragments)
-					if (--i < 1)
-						appendCode(o_code, o_locs, c.getValue0(), c.getValue1());
-				o_code.add(it.ordinal());
+				for (Compiled c : fragments)
+					appendCode(compiled, c);
+
+				compiled.addInstruction(it);
 			}
 			else if ( ! mQuiet)
 				Log.d(TAG, "Unknown assembler token " + t);
@@ -690,26 +724,26 @@ public class LLLCompiler
 		
 	}
 	
-	void appendCode(u256s o_code, List<Integer> o_locs, u256s _code, List<Integer> _locs)
+	void appendCode(Compiled compiled, Compiled c)
 	{
-		for (Integer i: _locs)
+		for (Integer i: c.getLocs())
 		{
-			Log.d(TAG, String.format("shift appending code by %d", o_code.size()));
-			_code.set(i, _code.get(i).add(new u256(o_code.size())));	// relocation?
+			Log.d(TAG, String.format("shift appending code by %d", compiled.getCode().size()));
+			c.getCode().set(i, c.getCode().get(i).add(new u256(compiled.getCode().size())));	// relocation?
 
-			int k = i + o_code.size();
+			int k = i + compiled.getCode().size();
 			Log.d(TAG, String.format("appendLoc %d (%d)", i, k));
-			o_locs.add(k);
+			compiled.getLocs().add(k);
 		}
-		for (u256 i: _code.getList())
+		for (u256 i: c.getCode().getList())
 		{
-			long j = i.mValue.longValue();
 			int k = i.mValue.intValue();
 			
 			Log.d(TAG, String.format("appendCode %s (%s)", 
 					i.toString(),
 					InstructionSet.OpCode.values()[k]));
-			o_code.add(i);
+			
+			compiled.getCode().add(i);
 		}
 	}
 

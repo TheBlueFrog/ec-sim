@@ -1,6 +1,8 @@
 package com.mike.ethereum.sim;
 
-import com.mike.ethereum.sim.CommonEth.Address;
+import java.math.BigInteger;
+
+import com.mike.ethereum.sim.CommonEth.Account;
 import com.mike.ethereum.sim.CommonEth.u256;
 import com.mike.ethereum.sim.CommonEth.u256s;
 import com.mike.ethereum.sim.InstructionSet.OpCode;
@@ -15,13 +17,20 @@ public class Main
 
 		String[] a = new String[]
 		{
- 			  "(seq"
-		  	+ "  (* 20 (basefee)) (stop)"
-		  	+ ")",
+// 			  "(seq"
+//		  	+ "  (* 20 (basefee)) (stop)"
+//		  	+ ")",
 			 
-//		  	  "(seq"
-//			+ "  (unless (>= (txvalue) (* 20 (basefee))) (stop))"
-//			+ ")",
+//	ok		  "(* 10 13)",
+//	ok		  "(unless (7) (stop))",
+//  ok			"(sload (txsender))",
+				
+			  "  (unless (>= (txvalue) (* 20 (basefee))) (stop))"
+			,
+			 
+		  	  "(seq"
+			+ "  (unless (>= (txvalue) (* 20 (basefee))) (stop))"
+			+ ")",
 			 
 			  "(seq"
 			+ "  (unless (>= (txvalue) (* 20 (basefee))) (stop))"
@@ -33,6 +42,8 @@ public class Main
 			+ "	   )"
 			+ "  )"
 			+ ")",
+			
+"			not being parsed properly",
 		};
 		
 		for (String s : a)
@@ -42,7 +53,24 @@ public class Main
 
 			Log.d(TAG, "Disassembles to " + disassemble(memory));
 			
-			new Executor (memory);
+			Account contract = new Account (new u256(new BigInteger("22222222")), new u256(new BigInteger("22222222")));
+			Account sender = new Account (new u256(new BigInteger("11112222")), new u256(new BigInteger("11112222")));
+
+			u256 amount = new u256 (333);
+			u256s data = new u256s ();
+			
+			Log.d(TAG, String.format("%s sends %s to contract %s, balance %s", 
+					sender.getAddress().toString(),
+					amount.toString(),
+					contract.getAddress().toString(),
+					contract.getBalance().toString())); 
+			
+			Executor e = new Executor (sender, amount, data, contract, memory);
+			
+			Log.d(TAG, String.format("Contract %s finished, fees %s, balance %s", 
+					contract.getAddress().toString(), 
+					e.getFees().toString(),
+					contract.getBalance().toString()));
 		}
 	}
 	
@@ -75,8 +103,9 @@ public class Main
 	static private class Executor 
 	{
 		VirtualMachineEnvironment vme = new VirtualMachineEnvironment();
+		u256 mFees = new u256(0);
 		
-		public Executor (u256s memory)
+		public Executor (Account sender, u256 amount, u256s data, Account contract, u256s memory)
 		{
 			FeeStructure fs = new FeeStructure();
 			
@@ -84,31 +113,30 @@ public class Main
 
 			// send a transaction to the contract
 			
-			Address contract = new Address (new u256(101));
-			Address sender = new Address (new u256(102));
-			u256 amount = new u256 (1);
-			u256s data = new u256s ();
-			u256 fees = new u256(0);
-			
 			vme.setup(contract, sender, amount, data, fs, null, null, 0);
 			
-			execute(contract, sender, amount, data, fees);
+			execute(contract, sender, amount, data);
 		}
 	
-		private void execute(Address _myAddress, Address _txSender, u256 _txValue, u256s _txData, u256 totalFee)
+		public u256 getFees()
+		{
+			return mFees;
+		}
+
+		private void execute(Account _myAddress, Account _txSender, u256 _txValue, u256s _txData)
 		{
 			VirtualMachine vm = new VirtualMachine(); 
 		
 			try
 			{
-				vm.go(vme, 1000);
+				vm.go(vme, 10000);
 			} 
 			catch (BadInstructionExeption | StackTooSmall | StepsDoneException e) 
 			{
 				e.printStackTrace();
 			}
 		
-			totalFee.add(vm.runFee());
+			mFees.add(vm.runFee());
 		}
 	}
 
