@@ -25,8 +25,9 @@ public class VirtualMachine
 		return new u256 (_a.getHash());
 	}
 
-	public VirtualMachine ()
+	public VirtualMachine (boolean logging)
 	{
+		mLogging = logging;
 	}
 
 	void reset()
@@ -88,14 +89,20 @@ public class VirtualMachine
 	{
 		m_stack.add(x);
 	}
+
+	public boolean mLogging = true;
+	
 	private void dumpStack()
 	{
-		for(int i = m_stack.size() - 1; i >= 0; --i)
+		if (mLogging)
 		{
-			u256 u = m_stack.get(i);
-			Log.d(TAG, String.format("Stack[%2d] %s", i, u.toString()));
+			for(int i = m_stack.size() - 1; i >= 0; --i)
+			{
+				u256 u = m_stack.get(i);
+				Log.d(TAG, String.format("Stack[%2d] %s", i, u.toString()));
+			}
+			Log.d(TAG, "");
 		}
-		Log.d(TAG, "");
 	}
 	
 	public void go(VirtualMachineEnvironment _ext, long _steps) 
@@ -113,7 +120,8 @@ public class VirtualMachine
 			// INSTRUCTION...
 			u256 rawInst = _ext.getStore(m_curPC);
 			
-			Log.d(TAG, String.format ("CurPC %s", m_curPC.toString()));
+			if (mLogging)
+				Log.d(TAG, String.format ("CurPC %s", m_curPC.toString()));
 			
 			if (rawInst.greaterThan(0xff))
 				throw new BadInstructionExeption("");
@@ -168,7 +176,8 @@ public class VirtualMachine
 			u256 y;
 			
 			// EXECUTE...
-			Log.d(TAG, String.format("Execute %s, ", inst.toString()));
+			if (mLogging)
+				Log.d(TAG, String.format("Execute %s, ", inst.toString()));
 			
 			switch (inst)
 			{

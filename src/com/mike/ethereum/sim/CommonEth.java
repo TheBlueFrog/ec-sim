@@ -38,6 +38,10 @@ public class CommonEth
 			mAddress = new u256(address);
 			mBalance = new u256(balance);
 		}
+		public Account(String address, String balance)
+		{
+			this (new u256(new BigInteger(address)), new u256(new BigInteger(balance)));
+		}
 
 		public u256 getBalance()
 		{
@@ -88,6 +92,10 @@ public class CommonEth
 				}
 			}
 		}
+		public String getShortAddress()
+		{
+			return mAddress.toString().substring(0, 10) + "...";
+		}
 	}
 	
 	static class Address
@@ -110,6 +118,12 @@ public class CommonEth
 		public byte[] getHash()
 		{
 			return mH;
+		}
+		
+		@Override
+		public String toString()
+		{
+			return CryptoUtil.asHex(mH);
 		}
 	}
 	

@@ -74,17 +74,17 @@ public class LLLCompiler
 		}
 	}
 	
-	public LLLCompiler ()
+	private boolean mLogging = false;
+	
+	public LLLCompiler (boolean logging)
 	{		
+		mLogging = logging;
 	}
 	
-	boolean mQuiet = true;
 	Deque<Input> mInput = new ArrayDeque<Input>();
 	
-	public u256s compileLisp(String _code, boolean _quiet)
+	public u256s compileLisp(String _code)
 	{
-		mQuiet = _quiet;
-		
 //		char const* d = _code.data();
 //		char const* e = _code.data() + _code.size();
 		Compiled c = new Compiled();
@@ -341,7 +341,7 @@ public class LLLCompiler
 				
 				Compiled j = new Compiled();
 				while (compileLispFragment(mToS.rest(), j))
-					if (! mQuiet)
+					if (mLogging)
 						Log.e(TAG, "Additional items in bare store. Ignoring.");
 
 				bareLoad = false;
@@ -715,7 +715,7 @@ public class LLLCompiler
 			
 			if (fragments.size() > 2)
 			{
-				Log.d(TAG, "Greater than two arguments given to binary operator " + t + "; using first two only.");
+				Log.e(TAG, "Greater than two arguments given to binary operator " + t + "; using first two only.");
 				while (fragments.size () > 2)
 					fragments.remove(fragments.size() - 1);
 			}
@@ -753,7 +753,7 @@ public class LLLCompiler
 				
 				if (fragments.size() > 2)
 				{
-					Log.d(TAG, "Greater than one argument given to unary operator " + t + "; using first only.");
+					Log.e(TAG, "Greater than one argument given to unary operator " + t + "; using first only.");
 					while (fragments.size () > 1)
 						fragments.remove(fragments.size() - 1);
 				}
@@ -768,8 +768,8 @@ public class LLLCompiler
 
 				compiled.addInstruction(it);
 			}
-			else if ( ! mQuiet)
-				Log.d(TAG, "Unknown assembler token " + t);
+			else 
+				Log.e(TAG, "Unknown assembler token " + t);
 		}		
 	}
 	
@@ -777,26 +777,33 @@ public class LLLCompiler
 	{
 		for (Integer i: c.getLocs())
 		{
-			Log.d(TAG, String.format("shift appending code by %d", compiled.getCode().size()));
+			if (mLogging)
+				Log.d(TAG, String.format("shift appending code by %d", compiled.getCode().size()));
+			
 			c.getCode().set(i, c.getCode().get(i).add(new u256(compiled.getCode().size())));	// relocation?
 
 			int k = i + compiled.getCode().size();
-			Log.d(TAG, String.format("appendLoc %d (%d)", i, k));
+
+			if (mLogging)
+				Log.d(TAG, String.format("appendLoc %d (%d)", i, k));
+			
 			compiled.getLocs().add(k);
 		}
 		for (u256 i: c.getCode().getList())
 		{
 			int k = i.mValue.intValue();
 			
-			Log.d(TAG, String.format("appendCode %s (%s or %d)", 
-					i.toString(),
-					k < InstructionSet.OpCode.values().length ? InstructionSet.OpCode.values()[k] : "n/a",
-					k));
+			if (mLogging)
+				Log.d(TAG, String.format("appendCode %s (%s or %d)", 
+						i.toString(),
+						k < InstructionSet.OpCode.values().length ? InstructionSet.OpCode.values()[k] : "n/a",
+						k));
 			
 			compiled.getCode().add(i);
 		}
 		
-		Log.d(TAG, "After appending code\n" + Disassembler.run(compiled.getCode()));
+		if (mLogging)
+			Log.d(TAG, "After appending code\n" + Disassembler.run(compiled.getCode()));
 	}
 
 
@@ -816,7 +823,7 @@ public class LLLCompiler
 
 		if (ret.length() > 32)
 		{
-			if (! mQuiet)
+//			if (mLogging)
 				Log.e(TAG, "String literal > 32 characters. Cropping.");
 			ret = ret.substring(0, 32);
 		}
