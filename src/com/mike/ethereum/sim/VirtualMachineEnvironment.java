@@ -23,19 +23,39 @@ public class VirtualMachineEnvironment
 	{
 	}
 	
-	/** load the contract into memory starting at
-	 * address zero
+	private int mProgramSize = 0;
+	
+	/** load the contract into memory starting at address zero
+	 *  and then recover the persistent storage and load
+	 *  that also
 	 */
-	public void setContract (u256s memory)
+	public void setContract (Account contract)
 	{
-		for (int i = 0; i < memory.size(); ++i)
-			mStorage.put(new u256(i), memory.get(i));
+		mStorage.clear();
+		
+		u256s program = contract.getProgram();
+		
+		for (int i = 0; i < program.size(); ++i)
+			mStorage.put(new u256(i), program.get(i));
+		
+		mProgramSize = program.size();
+		
+		Map<u256, u256> st = contract.getStorage ();
+		for (u256 s : st.keySet())
+		{
+			mStorage.put(s, st.get(s));
+		}
 	}
+
 	public int getContractSize ()
 	{
 		return mStorage.size();
 	}
-	
+	public Map<u256, u256> getStorage() 
+	{
+		return mStorage;
+	}
+
 	public void setup(
 			Account _myAddress, 
 			Account _txSender, 
@@ -113,15 +133,21 @@ public class VirtualMachineEnvironment
 		myAddress.payFee(amt);
 	}
 
+	/** dump storage but only above the program itself */
 	public void dumpStorage()
 	{
 		StringBuilder sb = new StringBuilder();
-		sb.append("Storage\n");
+		sb.append(String.format("Storage (above program itself (0..%d)\n", mProgramSize));
+		sb.append(String.format("%-35s %s\n", "Address", "Value"));
+		
 		for (Entry<u256, u256> x : mStorage.entrySet())
 		{
-			sb.append (String.format("%s\n    %s\n",
-					x.getKey().toString(),
-					x.getValue().toString()));
+			if (x.getKey().greaterThan(mProgramSize))
+			{
+				sb.append (String.format("%-35s%s\n",
+						x.getKey().toString(),
+						x.getValue().toString()));
+			}
 		}
 		
 		Log.d(TAG, sb.toString());

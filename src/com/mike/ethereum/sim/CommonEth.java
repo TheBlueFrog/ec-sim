@@ -2,7 +2,10 @@ package com.mike.ethereum.sim;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 
 import org.javatuples.Pair;
 
@@ -27,6 +30,8 @@ public class CommonEth
 		
 		private u256 mAddress;
 		private u256 mBalance;
+		private u256s mProgram = new u256s();
+		private Map<u256, u256> mPersistentStorage = new HashMap<u256, u256>();
 		
 		public Account (u256 address, u256 balance)
 		{
@@ -57,6 +62,32 @@ public class CommonEth
 		{
 			return new Address(this);
 		}
+
+		public void setProgram(u256s memory) 
+		{
+			mProgram = memory;
+		}
+		public u256s getProgram() 
+		{
+			return mProgram;
+		}
+
+		public Map<u256, u256> getStorage() 
+		{
+			return mPersistentStorage;
+		}
+		public void saveStorage(Map<u256, u256> storage)
+		{
+			mPersistentStorage.clear();
+			
+			for (Entry<u256, u256> x : storage.entrySet())
+			{
+				if (x.getKey().greaterThan(mProgram.size()))
+				{
+					mPersistentStorage.put(x.getKey(), x.getValue());
+				}
+			}
+		}
 	}
 	
 	static class Address
@@ -70,11 +101,10 @@ public class CommonEth
 			// from C++ code
 			// Convert from a 256-bit integer stack/memory entry into a 160-bit Address hash.
 			// Currently we just pull out the right (low-order in BE) 160-bits.
-			
-			// take some random chunk?
+
 			byte[] b = account.getFullAddress().toByteArray();
 			for (int i = 0; i < Math.min(20, b.length); ++i)
-				mH[i] = b[i];
+				mH[20 - i - 1] = b[b.length - i - 1];
 		}
 		
 		public byte[] getHash()

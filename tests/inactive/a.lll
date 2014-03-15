@@ -1,12 +1,4 @@
 
 (seq
-  (unless (>= (txvalue) (* 20 (basefee))) (stop))
-  (sstore
-    (txsender)
-    (+
-      (sload (txsender))
-      (- (txvalue) (* 20 (basefee)))
-    )
-  )
-  (if 1 (* 77 78) (* 44 45) )
+  (- 77 2)
 )

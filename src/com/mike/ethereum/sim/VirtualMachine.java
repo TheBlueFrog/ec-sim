@@ -196,7 +196,7 @@ public class VirtualMachine
 				require(2);
 				x = popStack();
 				y = popStack();
-				pushStack(x.subtract(y));
+				pushStack(y.subtract(x));	// not same as the spec...
 				break;
 			case DIV:
 				/* updated spec
@@ -603,9 +603,13 @@ public class VirtualMachine
 				pushStack(_ext.getStore(x));
 				break;
 			case SSTORE:							// pops two items and sets the item in storage at index S[-1] to S[-2]
+				/*
+				 	SSTORE -2 +0
+					P[ S'[0] ] := S'[1]
+				 */
 				require(2);
+				y = popStack();		// BACKWARDS does not match spec
 				x = popStack();
-				y = popStack();
 				_ext.setStore(x, y);
 				break;
 			case JMP:								// pops one item and sets the index pointer (PC) to S[-1]
