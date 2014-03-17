@@ -1,13 +1,9 @@
 package com.mike.ethereum.sim;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.mike.ethereum.sim.CommonEth.Account;
 import com.mike.ethereum.sim.CommonEth.u256;
 import com.mike.ethereum.sim.CommonEth.u256s;
 
@@ -27,17 +23,17 @@ public class Main
 		
 		List<Account> mContracts = new ArrayList<Account>();
 		
-		for (File f : getInputs(args[0]))
+		for (File f : Util.filesWithExtension(args[0], "lll"))
 		{
-			byte[] body = readAll(f);
+			byte[] body = Util.readAll(f);
 			u256s memory = x.compileLisp(new String(body));
 
 			if (mLogging)
 				Log.d(TAG, "Disassembles to\n" + Disassembler.run(memory));			
 			
-			String address = CryptoUtil.asDecimal(CryptoUtil.SHA256 (f.getPath()));
-			
-			Account a = new Account (address, "2222");
+			u256 address = new u256(Util.asDecimal(CryptoUtil.SHA256 (f.getPath())));
+			u256 balance = new u256("2222");
+			Account a = Account.createAccount(address, balance);
 			mContracts.add(a);
 			a.setProgram(memory);
 
@@ -46,65 +42,68 @@ public class Main
 					a.getShortAddress()));
 		}
 				
-		// trigger event
+		// trigger event, specific to example.lll
 		
-		Account sender = new Account ("111111111111", "1111");
+		Account sender = Account.createAccount (new u256("111111111111"), new u256("1111"));
 
-		u256 amount = new u256 (333);
-		u256s data = new u256s ();
-
-		for (int i = 0; i < 3; ++i)
 		{
-			Log.d(TAG, String.format("%s sends %s to contract %s, balance %s", 
-					sender.getShortAddress(),
-					amount.toString(),
-					mContracts.get(0).getShortAddress(),
-					mContracts.get(0).getBalance().toString())); 
+			Transaction t = new Transaction (
+					sender, 
+					mContracts.get(0), 
+					new u256 (333), 
+					new u256s ());
+	
+			// make 3 deposits
 			
-			e.doSendToContract(sender, amount, data, mContracts.get(0));
-			
-			Log.d(TAG, String.format("Contract %s finished, fees %s, balance %s", 
-					mContracts.get(0).getShortAddress(), 
-					e.getFees().toString(),
-					mContracts.get(0).getBalance().toString()));
-		}
-	}
-
-	static private byte[] readAll(File f) 
-	{
-		FileInputStream fis;
-		try 
-		{
-			fis = new FileInputStream (f);
-			byte[] buffer = new byte[(int) f.length()];
-			fis.read(buffer);
-			fis.close();
-			return buffer;
-		}
-		catch (FileNotFoundException e) 
-		{
-			e.printStackTrace();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		return null;
-	}
-
-	static private List<File> getInputs(String dir) 
-	{
-		List<File> r = new ArrayList<File>();
-		
-		File[] v = new File(dir).listFiles().clone();
-
-		for (File f : v)
-		{
-			if (f.getPath().endsWith(".lll"))
+			for (int i = 0; i < 3; ++i)
 			{
-				r.add(f);
+				Log.d(TAG, String.format("%s deposits %s to contract (%s, balance %s)", 
+						sender.getShortAddress(),
+						t.getAmount().toString(),
+						mContracts.get(0).getShortAddress(),
+						mContracts.get(0).getBalance().toString())); 
+				
+				e.doToContractTransaction(t);
+				
+				Log.d(TAG, String.format("Contract %s finished, fees %s, balance %s", 
+						mContracts.get(0).getShortAddress(), 
+						e.getFees().toString(),
+						mContracts.get(0).getBalance().toString()));
 			}
 		}
-		return r;
+		
+		{
+			/*
+			Finally, we'll make a withdrawal of fund back to our account. Let's 
+			assume we want to take one ether back. All we must do is send a 
+			transaction to the contract making sure to pay the charge of 135 
+			times the basefee (100 szabo), and specify the amount to withdraw 
+			as a single item in the Data. So change the Amount so it reads "13500 szabo" 	
+			*/
+			Log.d(TAG, String.format("%s withdraws %s from contract (%s, balance %s)", 
+					sender.getShortAddress(),
+					100,
+					mContracts.get(0).getShortAddress(),
+					mContracts.get(0).getBalance().toString())); 
+	
+			u256s data = new u256s ();
+			data.add(new u256(97));
+			
+			for (int i = 0; i < 2; ++i)
+			{
+				Transaction t = new Transaction (
+						sender, 
+						mContracts.get(0), 
+						new u256 (e.mFeeStructure.getBaseFee().mult(135L)), 
+						data);
+		
+				e.doToContractTransaction(t);
+		
+				Log.d(TAG, String.format("Contract %s finished, fees %s, balance %s", 
+						mContracts.get(0).getShortAddress(), 
+						e.getFees().toString(),
+						mContracts.get(0).getBalance().toString()));
+			}
+		}
 	}
-
-
 }

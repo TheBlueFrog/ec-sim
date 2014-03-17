@@ -12,55 +12,55 @@ public class InstructionSet
 	{
 		STOP,				// 0  halts execution
 		ADD,
-		MUL,
+		MUL,				// 2
 		SUB,
-		DIV,
+		DIV,				// 4
 		SDIV,				// 5
-		MOD,
-		SMOD,
-		EXP,
+		MOD,				// 6
+		SMOD,				
+		EXP,				// 8
 		NEG,
 		LT,					// 10
 		LE,
-		GT,
+		GT,					// 12
 		GE,
-		EQ,
+		EQ,					// 14
 		NOT,				// 15
-		MYADDRESS,			///< pushes the transaction sender
-		TXSENDER,			///< pushes the transaction sender
-		TXVALUE	,			///< pushes the transaction value
-		TXDATAN,			///< pushes the number of data items
-		TXDATA,				// 20  pops one item and pushes data item S[-1], or zero if index out of range
-		BLK_PREVHASH,		///< pushes the hash of the previous block (NOT the current one since that's impossible!)
-		BLK_COINBASE,		///< pushes the coinbase of the current block
-		BLK_TIMESTAMP,		///< pushes the timestamp of the current block
-		BLK_NUMBER,			///< pushes the current block number
-		BLK_DIFFICULTY,		// 25 pushes the difficulty of the current block
+		MYADDRESS,			// 16				/< pushes the transaction sender
+		TXSENDER,			//				/< pushes the transaction sender
+		TXVALUE	,			// 18				/< pushes the transaction value
+		TXDATAN,			//				/< pushes the number of data items
+		TXDATA,				// 20  			pops one item and pushes data item S[-1], or zero if index out of range
+		BLK_PREVHASH,		//				/< pushes the hash of the previous block (NOT the current one since that's impossible!)
+		BLK_COINBASE,		// 22			/< pushes the coinbase of the current block
+		BLK_TIMESTAMP,		//				/< pushes the timestamp of the current block
+		BLK_NUMBER,			// 24			< pushes the current block number
+		BLK_DIFFICULTY,		// 25 			pushes the difficulty of the current block
 		BLK_NONCE,
 		BASEFEE,
-		SHA256,				// = 0x20, 32
+		SHA256,				// 28				= 0x20, 32
 		RIPEMD160,
-		ECMUL,
-		ECADD,				// 35
-		ECSIGN,
+		ECMUL,				// 30
+		ECADD,				// 			
+		ECSIGN,				// 32
 		ECRECOVER,
-		ECVALID,
-		SHA3,				// 39
-		PUSH,				// = 0x30, 48
+		ECVALID,			// 34
+		SHA3,				// 35
+		PUSH,				// 36
 		POP,
-		DUP,
-		SWAP,
-		MLOAD,
+		DUP,				// 38
+		SWAP,				// 
+		MLOAD,				// 40
 		MSTORE,
-		SLOAD,
-		SSTORE,
-		JMP,
-		JMPI,
-		IND,
+		SLOAD,				// 42
+		SSTORE,				// 43
+		JMP,				// 44
+		JMPI,				// 45
+		IND,				// 46
 		EXTRO,
-		BALANCE,
-		MKTX,
-		SUICIDE,;		// = 0x3f	63
+		BALANCE,			// 49
+		MKTX,				// 49
+		SUICIDE,;			// 50			spec says = 0x3f	63
 
 
 		public static OpCode parse(String t)

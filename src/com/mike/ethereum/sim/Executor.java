@@ -1,8 +1,6 @@
 package com.mike.ethereum.sim;
 
-import com.mike.ethereum.sim.CommonEth.Account;
 import com.mike.ethereum.sim.CommonEth.u256;
-import com.mike.ethereum.sim.CommonEth.u256s;
 
 class Executor 
 {
@@ -20,15 +18,15 @@ class Executor
 		mLogging  = logging;
 	}
 
-	public void doSendToContract (Account sender, u256 amount, u256s data, Account contract)
+	public void doToContractTransaction (Transaction t)
 	{
-		vme.setContract(contract);
+		vme.setContract(t.getReceiver());
 
-		vme.setup(contract, sender, amount, data, mFeeStructure, null, null, 0);
+		vme.setup(t, mFeeStructure, null, null, 0);
 		
-		execute(contract, sender, amount, data);
+		execute();//contract, sender, amount, data);
 
-		contract.saveStorage(vme.getStorage());
+		t.getReceiver().saveStorage(vme.getStorage());
 		vme.dumpStorage();
 	}
 
@@ -37,7 +35,7 @@ class Executor
 		return mFees;
 	}
 
-	private void execute(Account _myAddress, Account _txSender, u256 _txValue, u256s _txData)
+	private void execute()//Account _myAddress, Account _txSender, u256 _txValue, u256s _txData)
 	{
 		VirtualMachine vm = new VirtualMachine(false); 
 	
@@ -45,7 +43,11 @@ class Executor
 		{
 			vm.go(vme, 10000);
 		} 
-		catch (BadInstructionExeption | StackTooSmall | StepsDoneException | StackUnderflowException e) 
+		catch (   BadInstructionExeption 
+				| StackTooSmallException 
+				| StepsDoneException 
+				| StackUnderflowException 
+				| OperandOutOfRangeException e) 
 		{
 			e.printStackTrace();
 		}

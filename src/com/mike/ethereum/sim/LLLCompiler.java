@@ -194,6 +194,7 @@ public class LLLCompiler
 					else
 					{
 						pop();
+						Log.e(TAG, "Unexpected ')'...");
 						return false;// unexpected - return false as we don't know what to do with it.
 					}
 					
@@ -215,7 +216,10 @@ public class LLLCompiler
 								if (literalValue != null)
 									handleBareLoad(input, token, compiled, exec, literalValue);
 								else if ( ! handleKeywordOpCode (input, token, compiled, exec))
-									break;							
+								{
+									Log.e(TAG,  "Unhandled token " + token);
+									return false;	// bad syntax							
+								}
 							}
 						}
 	

@@ -2,10 +2,7 @@ package com.mike.ethereum.sim;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
 
 import org.javatuples.Pair;
 
@@ -23,80 +20,6 @@ public class CommonEth
 	using Address = h160;
 	using Addresses = h160s;
 */
-	
-	static class Account
-	{
-		private static final String TAG = Account.class.getSimpleName();
-		
-		private u256 mAddress;
-		private u256 mBalance;
-		private u256s mProgram = new u256s();
-		private Map<u256, u256> mPersistentStorage = new HashMap<u256, u256>();
-		
-		public Account (u256 address, u256 balance)
-		{
-			mAddress = new u256(address);
-			mBalance = new u256(balance);
-		}
-		public Account(String address, String balance)
-		{
-			this (new u256(new BigInteger(address)), new u256(new BigInteger(balance)));
-		}
-
-		public u256 getBalance()
-		{
-			return mBalance;
-		}
-
-		public void payFee(u256 amt) 
-		{
-			mBalance = mBalance.subtract(amt);
-			
-			if (mBalance.lessThan(0))
-			{
-				Log.e(TAG,  String.format("OOOOPS, balance of %s has gone negative.", mAddress.toString()));
-			}
-		}
-
-		public u256 getFullAddress() 
-		{
-			return mAddress;
-		}
-		public Address getAddress() 
-		{
-			return new Address(this);
-		}
-
-		public void setProgram(u256s memory) 
-		{
-			mProgram = memory;
-		}
-		public u256s getProgram() 
-		{
-			return mProgram;
-		}
-
-		public Map<u256, u256> getStorage() 
-		{
-			return mPersistentStorage;
-		}
-		public void saveStorage(Map<u256, u256> storage)
-		{
-			mPersistentStorage.clear();
-			
-			for (Entry<u256, u256> x : storage.entrySet())
-			{
-				if (x.getKey().greaterThan(mProgram.size()))
-				{
-					mPersistentStorage.put(x.getKey(), x.getValue());
-				}
-			}
-		}
-		public String getShortAddress()
-		{
-			return mAddress.toString().substring(0, 10) + "...";
-		}
-	}
 	
 	static class Address
 	{
@@ -123,7 +46,7 @@ public class CommonEth
 		@Override
 		public String toString()
 		{
-			return CryptoUtil.asHex(mH);
+			return Util.asHex(mH);
 		}
 	}
 	
@@ -302,6 +225,11 @@ public class CommonEth
 	        
 			return mValue.equals(d.mValue);
 		}
+		public int getBaseFee()
+		{
+			// TODO Auto-generated method stub
+			return 0;
+		}
 
 	}
 	
@@ -351,6 +279,11 @@ public class CommonEth
 		public List<u256> getList()
 		{
 			return mList;
+		}
+
+		public void clear()
+		{
+			mList.clear();
 		}
 
 	}

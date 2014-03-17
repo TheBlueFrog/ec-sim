@@ -4,7 +4,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import com.mike.ethereum.sim.CommonEth.Account;
 import com.mike.ethereum.sim.CommonEth.Address;
 import com.mike.ethereum.sim.CommonEth.u256;
 import com.mike.ethereum.sim.CommonEth.u256s;
@@ -57,19 +56,16 @@ public class VirtualMachineEnvironment
 	}
 
 	public void setup(
-			Account _myAddress, 
-			Account _txSender, 
-			u256 _txValue, 
-			u256s _txData, 
+			Transaction transaction,
 			FeeStructure _fees, 
 			BlockInfo _previousBlock, 
 			BlockInfo _currentBlock, 
 			long _currentNumber)
 	{
-		myAddress = _myAddress;
-		txSender = _txSender;
-		txValue = _txValue;
-		txData = _txData;
+		myAccount = transaction.getReceiver();
+		txSender = transaction.getSender();
+		txValue = transaction.getAmount();
+		txData = transaction.getData();
 		fees = _fees;
 //		previousBlock(_previousBlock),
 //		currentBlock(_currentBlock),
@@ -98,11 +94,10 @@ public class VirtualMachineEnvironment
 		mStorage.put(_n,  _v);
 	}
 	
-//	void mktx(Transaction& _t) {}
 //	u256 txCount(Address _a) { return 0; }
 //	u256 extroPrice(Address _a) { return 0; }
 
-	Account myAddress;
+	Account myAccount;
 	Account txSender;
 	u256 txValue;
 	u256s txData;
@@ -130,7 +125,7 @@ public class VirtualMachineEnvironment
 
 	public void payFee(u256 amt) 
 	{
-		myAddress.payFee(amt);
+		myAccount.payFee(amt);
 	}
 
 	/** dump storage but only above the program itself */
@@ -151,6 +146,12 @@ public class VirtualMachineEnvironment
 		}
 		
 		Log.d(TAG, sb.toString());
+	}
+
+	public void mktx(Transaction t)
+	{
+		// TODO Auto-generated method stub
+		
 	}
 
 
