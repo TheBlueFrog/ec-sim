@@ -38,9 +38,13 @@ public class FeeStructure
 //		m_txFee = c_txFee * _x;
 	}
 
-	u256 getStepFee() 
+	public u256 getStepFee() 
 	{
 		return m_stepFee.divide(c_stepFee);
+	}
+	public u256 getBaseFee()
+	{
+		return getStepFee();
 	}
 
 	public u256 getMemoryFee() 
@@ -65,6 +69,7 @@ public class FeeStructure
 	{
 		return c_txFee;
 	}
+
 
 
 }

@@ -1,14 +1,9 @@
 package com.mike.ethereum.sim;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.mike.ethereum.sim.CommonEth.Account;
 import com.mike.ethereum.sim.CommonEth.u256;
 import com.mike.ethereum.sim.CommonEth.u256s;
 
@@ -16,125 +11,99 @@ public class Main
 {
 	private static final String TAG = Main.class.getSimpleName();
 
+	static private boolean mLogging = false;
+	
 	public static void main(String[] args)
 	{
-		LLLCompiler x = new LLLCompiler();
-		Executor e = new Executor ();
+		LLLCompiler x = new LLLCompiler(mLogging);
+		Executor e = new Executor (true);
 		
-		for (File f : getInputs(args[0]))
+		// suck up all the contracts that are in the given dir
+		// setup an account for them and get the code compiled
+		
+		List<Account> mContracts = new ArrayList<Account>();
+		
+		for (File f : Util.filesWithExtension(args[0], "lll"))
 		{
-			Log.d(TAG, "Compile " + f.getPath());
-			
-			byte[] body = readAll(f);
-			u256s memory = x.compileLisp(new String(body), false);
+			byte[] body = Util.readAll(f);
+			u256s memory = x.compileLisp(new String(body));
 
-			Log.d(TAG, "Disassembles to\n" + Disassembler.run(memory));			
+			if (mLogging)
+				Log.d(TAG, "Disassembles to\n" + Disassembler.run(memory));			
 			
-			Account contract = new Account (new u256(new BigInteger("22222222")), new u256(new BigInteger("22222222")));
-			contract.setProgram(memory);
+			u256 address = new u256(Util.asDecimal(CryptoUtil.SHA256 (f.getPath())));
+			u256 balance = new u256("2222");
+			Account a = Account.createAccount(address, balance);
+			mContracts.add(a);
+			a.setProgram(memory);
+
+			Log.d(TAG, String.format("Compiled %s into %s",
+					f.getPath(),
+					a.getShortAddress()));
+		}
+				
+		// trigger event, specific to example.lll
+		
+		Account sender = Account.createAccount (new u256("111111111111"), new u256("1111"));
+
+		{
+			Transaction t = new Transaction (
+					sender, 
+					mContracts.get(0), 
+					new u256 (333), 
+					new u256s ());
+	
+			// make 3 deposits
 			
-			Account sender = new Account (new u256(new BigInteger("11112222")), new u256(new BigInteger("11112222")));
-
-			u256 amount = new u256 (333);
-			u256s data = new u256s ();
-
 			for (int i = 0; i < 3; ++i)
 			{
-				Log.d(TAG, String.format("%s sends %s to contract %s, balance %s", 
-						sender.getAddress().toString(),
-						amount.toString(),
-						contract.getAddress().toString(),
-						contract.getBalance().toString())); 
+				Log.d(TAG, String.format("%s deposits %s to contract (%s, balance %s)", 
+						sender.getShortAddress(),
+						t.getAmount().toString(),
+						mContracts.get(0).getShortAddress(),
+						mContracts.get(0).getBalance().toString())); 
 				
-				e.doSendToContract(sender, amount, data, contract);
+				e.doToContractTransaction(t);
 				
 				Log.d(TAG, String.format("Contract %s finished, fees %s, balance %s", 
-						contract.getAddress().toString(), 
+						mContracts.get(0).getShortAddress(), 
 						e.getFees().toString(),
-						contract.getBalance().toString()));
+						mContracts.get(0).getBalance().toString()));
 			}
 		}
-	}
-	static private byte[] readAll(File f) 
-	{
-		FileInputStream fis;
-		try 
-		{
-			fis = new FileInputStream (f);
-			byte[] buffer = new byte[(int) f.length()];
-			fis.read(buffer);
-			fis.close();
-			return buffer;
-		}
-		catch (FileNotFoundException e) 
-		{
-			e.printStackTrace();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		return null;
-	}
-
-	static private List<File> getInputs(String dir) 
-	{
-		List<File> r = new ArrayList<File>();
 		
-		File[] v = new File(dir).listFiles().clone();
-
-		for (File f : v)
 		{
-			if (f.getPath().endsWith(".lll"))
-			{
-				r.add(f);
-			}
-		}
-		return r;
-	}
-
-	static private class Executor 
-	{
-		VirtualMachineEnvironment vme = new VirtualMachineEnvironment();
-		FeeStructure mFeeStructure = new FeeStructure();
-		
-		u256 mFees = new u256(0);
-		
-		public Executor ()
-		{
-		}
-
-		public void doSendToContract (Account sender, u256 amount, u256s data, Account contract)
-		{
-			vme.setContract(contract);
-
-			vme.setup(contract, sender, amount, data, mFeeStructure, null, null, 0);
-			
-			execute(contract, sender, amount, data);
-
-			contract.saveStorage(vme.getStorage());
-			vme.dumpStorage();
-		}
+			/*
+			Finally, we'll make a withdrawal of fund back to our account. Let's 
+			assume we want to take one ether back. All we must do is send a 
+			transaction to the contract making sure to pay the charge of 135 
+			times the basefee (100 szabo), and specify the amount to withdraw 
+			as a single item in the Data. So change the Amount so it reads "13500 szabo" 	
+			*/
+			Log.d(TAG, String.format("%s withdraws %s from contract (%s, balance %s)", 
+					sender.getShortAddress(),
+					100,
+					mContracts.get(0).getShortAddress(),
+					mContracts.get(0).getBalance().toString())); 
 	
-		public u256 getFees()
-		{
-			return mFees;
-		}
-
-		private void execute(Account _myAddress, Account _txSender, u256 _txValue, u256s _txData)
-		{
-			VirtualMachine vm = new VirtualMachine(); 
+			u256s data = new u256s ();
+			data.add(new u256(97));
+			
+			for (int i = 0; i < 2; ++i)
+			{
+				Transaction t = new Transaction (
+						sender, 
+						mContracts.get(0), 
+						new u256 (e.mFeeStructure.getBaseFee().mult(135L)), 
+						data);
 		
-			try
-			{
-				vm.go(vme, 10000);
-			} 
-			catch (BadInstructionExeption | StackTooSmall | StepsDoneException | StackUnderflowException e) 
-			{
-				e.printStackTrace();
+				e.doToContractTransaction(t);
+		
+				Log.d(TAG, String.format("Contract %s finished, fees %s, balance %s", 
+						mContracts.get(0).getShortAddress(), 
+						e.getFees().toString(),
+						mContracts.get(0).getBalance().toString()));
 			}
-		
-			mFees.add(vm.runFee());
 		}
 	}
-
-
 }

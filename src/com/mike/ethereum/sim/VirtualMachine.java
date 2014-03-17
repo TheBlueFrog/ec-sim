@@ -5,7 +5,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.mike.ethereum.sim.CommonEth.Account;
 import com.mike.ethereum.sim.CommonEth.Address;
 import com.mike.ethereum.sim.CommonEth.u256;
 
@@ -17,7 +16,7 @@ public class VirtualMachine
 	// Currently we just pull out the right (low-order in BE) 160-bits.
 	private Address asAddress(u256 a)
 	{
-		return new Account(a, new u256(0)).getAddress();
+		return Account.getFromAddress(a).getAddress();
 	}
 
 	private u256 fromAddress(Address _a)
@@ -25,8 +24,9 @@ public class VirtualMachine
 		return new u256 (_a.getHash());
 	}
 
-	public VirtualMachine ()
+	public VirtualMachine (boolean logging)
 	{
+		mLogging = logging;
 	}
 
 	void reset()
@@ -60,15 +60,15 @@ public class VirtualMachine
 	private int STACK_SIZE = 1000;
 	List<u256> m_stack = new ArrayList<u256>(STACK_SIZE);
 
-	void require(u256 _n) throws StackTooSmall
+	void require(u256 _n) throws StackTooSmallException
 	{
 		if (_n.greaterThan(STACK_SIZE))
-			throw new StackTooSmall(""); 
+			throw new StackTooSmallException(""); 
 	}
-	void require(int i) throws StackTooSmall, StackUnderflowException
+	void require(int i) throws StackTooSmallException, StackUnderflowException
 	{
 		if (i > STACK_SIZE)
-			throw new StackTooSmall(""); 
+			throw new StackTooSmallException(""); 
 		
 		if (m_stack.size() < i)
 			throw new StackUnderflowException (String.format("Requires %d items, only %d on stack.", i, m_stack.size()));
@@ -88,18 +88,29 @@ public class VirtualMachine
 	{
 		m_stack.add(x);
 	}
+
+	public boolean mLogging = true;
+	
 	private void dumpStack()
 	{
-		for(int i = m_stack.size() - 1; i >= 0; --i)
+		if (mLogging)
 		{
-			u256 u = m_stack.get(i);
-			Log.d(TAG, String.format("Stack[%2d] %s", i, u.toString()));
+			for(int i = m_stack.size() - 1; i >= 0; --i)
+			{
+				u256 u = m_stack.get(i);
+				Log.d(TAG, String.format("Stack[%2d] %s", i, u.toString()));
+			}
+			Log.d(TAG, "");
 		}
-		Log.d(TAG, "");
 	}
 	
 	public void go(VirtualMachineEnvironment _ext, long _steps) 
-			throws BadInstructionExeption, StackTooSmall, StepsDoneException, StackUnderflowException
+			throws 
+				BadInstructionExeption, 
+				StackTooSmallException, 
+				StepsDoneException, 
+				StackUnderflowException, 
+				OperandOutOfRangeException
 	{
 		boolean stopped = false;
 		while ( ! stopped && (_steps-- > 0))
@@ -113,7 +124,8 @@ public class VirtualMachine
 			// INSTRUCTION...
 			u256 rawInst = _ext.getStore(m_curPC);
 			
-			Log.d(TAG, String.format ("CurPC %s", m_curPC.toString()));
+			if (mLogging)
+				Log.d(TAG, String.format ("CurPC %s", m_curPC.toString()));
 			
 			if (rawInst.greaterThan(0xff))
 				throw new BadInstructionExeption("");
@@ -168,7 +180,8 @@ public class VirtualMachine
 			u256 y;
 			
 			// EXECUTE...
-			Log.d(TAG, String.format("Execute %s, ", inst.toString()));
+			if (mLogging)
+				Log.d(TAG, String.format("Execute %s, ", inst.toString()));
 			
 			switch (inst)
 			{
@@ -293,7 +306,7 @@ public class VirtualMachine
 				pushStack(x.equal(0) ? new u256(1) : new u256(0));
 				break;
 			case MYADDRESS:
-				pushStack(fromAddress(_ext.myAddress.getAddress()));
+				pushStack(fromAddress(_ext.myAccount.getAddress()));
 				break;
 			case TXSENDER:
 				pushStack(fromAddress(_ext.txSender.getAddress()));
@@ -647,28 +660,35 @@ public class VirtualMachine
 				break;
 			}
 			case MKTX:
+				/*
+					MKTX -(minimum: 3) +0
+					Immediately executes a transaction where:
+					The recipient is given by S'[0], when interpreted as an address.
+					The value is given by S'[1]
+					The data of the transaction is given by S'[3], S'[4], ... S'[ 2 + S'[2] ]
+					Thus the number of data items of the transaction is given by S'[2].
+					NOTE: This transaction is not queued; full ramifications take effect 
+					immediately, including balance transfers and any contract invocations.
+				 */
 			{
 				require(3);
-				assert false : "NYI";
 
-//				Transaction t;
-//				t.receiveAddress = asAddress(m_stack.back());
-//				m_stack.pop_back();
-//				t.value = m_stack.back();
-//				m_stack.pop_back();
-//
-//				auto itemCount = m_stack.back();
-//				m_stack.pop_back();
-//				if (m_stack.size() < itemCount)
-//					throw OperandOutOfRange(0, m_stack.size(), itemCount);
-//				t.data.reserve((uint)itemCount);
-//				for (auto i = 0; i < itemCount; ++i)
-//				{
-//					t.data.push_back(m_stack.back());
-//					m_stack.pop_back();
-//				}
-//
-//				_ext.mktx(t);
+				Transaction t = new Transaction (
+						_ext.myAccount.getAddress(),
+						asAddress(popStack()),			// receiver
+						popStack()); 					// amount
+
+				int itemCount = popStack().intValue();
+				if (m_stack.size() < itemCount)
+					throw new OperandOutOfRangeException(String.format("MKTX,  too few arguments, stack has %d, need %d", 
+							m_stack.size(), 
+							itemCount));
+				for (int j = 0; j < itemCount; ++j)
+				{
+					t.addData(popStack());
+				}
+
+				_ext.mktx(t);
 				break;
 			}
 			case SUICIDE:
@@ -692,6 +712,12 @@ public class VirtualMachine
 		
 		if (_steps == -1)
 			throw new StepsDoneException("Ran out of steps");
+	}
+
+	private Exception OperandOutOfRange(String format)
+	{
+		// TODO Auto-generated method stub
+		return null;
 	}
 
 }

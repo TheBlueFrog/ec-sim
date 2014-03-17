@@ -1,0 +1,20 @@
+
+(seq
+  ;; Stop unless there is at least the fee and the sender has a valid account.
+  (unless (and (> (txsender) 0xff) (>= (txvalue) (* 20 (basefee)))) (stop))
+
+  ;; Check to see if there's at least one argument (i.e. is a withdrawal) and 
+  ;; if the appropriate fees have been paid for withdrawal.
+  (if (and (txdatan)
+        (>= (txvalue) (* 135 (basefee)))
+        (>= (sload (txsender)) (txdata 0)) )
+    ;; At least one data item... Withdraw
+    (seq
+      ;; Subtract the value from the balance of the account
+      (sstore (txsender) (- (sload (txsender)) (txdata 0)))
+      (mktx (txsender) (txdata 0) 0)
+    )
+    ;; Else... Deposit
+    (sstore (txsender) (+ (sload (txsender)) (- (txvalue) (* 20 (basefee)))) )
+  )
+)
