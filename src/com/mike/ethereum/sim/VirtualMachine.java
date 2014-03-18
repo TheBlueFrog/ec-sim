@@ -214,7 +214,7 @@ public class VirtualMachine
 				require(2);
 				x = popStack();
 				y = popStack();
-				pushStack(y.subtract(x));	// not same as the spec...
+				pushStack(x.subtract(y));
 				break;
 			case DIV:
 				/* updated spec

@@ -1,8 +1,6 @@
 package com.mike.ethereum.sim;
 
-import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -160,8 +158,6 @@ public class LLLCompiler
 		mLogging = logging;
 	}
 	
-	Deque<Frame> mFrames = new ArrayDeque<Frame>();
-
 	private Frame mRoot;
 	
 	public u256s compileLisp(String _code)
@@ -176,50 +172,70 @@ public class LLLCompiler
 		mRoot = new Frame(_code, null);
 
 		compileLispFragment(mRoot);
+		mRoot.outputChildren();
 		
-		dump(mRoot);
+//		Log.d(TAG, "DUMP");
+//		dump(mRoot);
 		
-		return null;
-//		return mLastFrame.mCompiled.getCode();
+		return mRoot.mCompiled.o_code;
 	}
 
-	private void dump(Frame parent)
-	{
-		Disassembler.run(parent.mCompiled.o_code);
-		
-		for (Frame f : parent.mChild)
-		{
-			dump(f);
-		}
-	}
+//	private void dump(Frame parent)
+//	{
+//		Log.d(TAG,  Disassembler.run(parent.mCompiled.o_code));
+//		
+//		for (Frame f : parent.mChildren)
+//		{
+//			dump(f);
+//		}
+//	}
 	
 	private String c_allowed = "+-*/%<>=!";
 
-	// shortcuts
-	private Input mToS;
-	private Compiled mCompiled;
-	
 	private class Frame
 	{
 		public Input mInput = null;
 		public Compiled mCompiled = null;
 
-		public List<Frame> mChild = new ArrayList<Frame>();
+		public Frame mParent;
+		public List<Frame> mChildren = new ArrayList<Frame>();
 		
 		public Frame (String s, Frame parent)
 		{
-			mInput = new Input(s);
-			mCompiled = new Compiled();
-
-			if (parent != null)
-				parent.mChild.add(this);
+			this (new Input (s), parent);
 		}
 		public Frame (Input input, Frame parent)
 		{
+			mParent = parent;
+			if (parent != null)
+				parent.mChildren.add(this);
+
 			mInput = input;
 			mCompiled = new Compiled();
-			
-			parent.mChild.add(this);
+		}
+
+		public void outputOpCode(InstructionSet.OpCode o)
+		{
+			mCompiled.addInstruction(o);
+		}
+		public void outputChild(int i)
+		{
+			appendCode(mCompiled, mChildren.get(i).mCompiled);
+		}
+		public void outputChildren()
+		{
+			for (Frame c : mChildren)
+			{
+				appendCode (mCompiled, c.mCompiled);
+			}
+		}
+		public void outputChildrenReversed()
+		{
+			for (int i = mChildren.size() - 1; i >= 0; --i)
+			{
+				Compiled c = mChildren.get(i).mCompiled;
+				appendCode(mCompiled, c);
+			}
 		}
 	}
 
@@ -285,34 +301,47 @@ public class LLLCompiler
 		}
 
 	}
-
-	private boolean compileLispFragment (Frame frame)//, Compiled compiled)
+	
+	Frame getFrame()
 	{
-		mToS = frame.mInput;
-		mCompiled = frame.mCompiled;
-		mFrames.push(frame);
+		return mFrame;
+	}
+	Input getToS()
+	{
+		return mFrame.mInput;
+	}
+	Compiled getCompiled()
+	{
+		return mFrame.mCompiled;
+	}
+
+	private Frame mFrame;
+	
+	private boolean compileLispFragment (Frame frame)
+	{
+		mFrame = frame;
 		
 		boolean exec = false;
 
-		while (mToS.more ())
+		while (getToS().more ())
 		{
 			skipToToken();
 			
-			if (mToS.more ())
+			if (getToS().more ())
 			{
-				switch (mToS.ch())
+				switch (getToS().ch())
 				{
 				case ';':
-					skipToEoL(mToS.mS);
+					skipToEoL(getToS().mS);
 					break;
 				case '(':
 					exec = true;
-					mToS.next();
+					getToS().next();
 					break;
 				case ')':
 					if (exec)
 					{
-						mToS.next();
+						getToS().next();
 						
 						pop();
 						return true;
@@ -329,11 +358,11 @@ public class LLLCompiler
 						u256 literalValue = null;
 						String token = null;
 			
-						if (mToS.ch() == '"')
-							literalValue = handleLiteral(mToS.mS);
+						if (getToS().ch() == '"')
+							literalValue = handleLiteral(getToS().mS);
 						else
 						{
-							token = mToS.getToken();
+							token = getToS().getToken();
 							if (token.length() > 0)
 							{
 								if (Character.isDigit(token.charAt(0)))
@@ -342,17 +371,17 @@ public class LLLCompiler
 						}
 
 						if (literalValue != null)
-							handleBareLoad(mToS.mS, token, exec, literalValue);
+							handleBareLoad(getToS().mS, token, exec, literalValue);
 						else 
 						{
 							token = token.toUpperCase();
 
 							if ("SEQ".equals (token))
 							{
-								if ( ! handleSeq(mToS.mS, token))
+								if ( ! handleSeq(getToS().mS, token))
 									break;
 							}
-							else if ( ! handleKeywordOpCode (mToS.mS, token, exec))
+							else if ( ! handleKeywordOpCode (getToS().mS, token, exec))
 							{
 								Log.e(TAG,  "Unhandled token " + token);
 								return false;	// bad syntax							
@@ -373,19 +402,19 @@ public class LLLCompiler
 		pop();
 		return false;
 	}
-
+	
 	private void pop()
 	{
-		int consumed = mToS.mI;
-		
-		mFrames.pop();
-		if ( ! mFrames.isEmpty())
-			mFrames.peek().mInput.advance (consumed);
+		if (mFrame.mParent != null)
+		{
+			int consumed = getToS().mI;
+			mFrame.mParent.mInput.advance (consumed);
+		}
 	}
 	
 	private u256 handleLiteral(String input)
 	{
-		String s = readQuoted(mToS.rest());
+		String s = readQuoted(getToS().rest());
 //		h256 valHash;
 //		memcpy(valHash.data(), s.data(), s.size());
 //		memset(valHash.data() + s.size(), 0, 32 - s.size());
@@ -396,8 +425,8 @@ public class LLLCompiler
 
 	private void skipToEoL(String input)
 	{
-		while (mToS.more () && mToS.ch() != '\n') 
-			mToS.next(); 
+		while (getToS().more () && getToS().ch() != '\n') 
+			getToS().next(); 
 	}
 
 
@@ -412,16 +441,16 @@ public class LLLCompiler
 		//       && !c_allowed.count(*d) 
 		//       && *d != ';'; ++d) {}
 
-		while (    mToS.more ()
-				&& ( ! Character.isAlphabetic(mToS.ch()))
-				&& ( ! Character.isDigit(mToS.ch())) 
-				&& mToS.ch() != '(' 
-				&& mToS.ch() != ')' 
-				&& mToS.ch() != '_' 
-				&& mToS.ch() != '"' 
-				&& (c_allowed.indexOf(mToS.ch()) < 0) 
-				&& mToS.ch() != ';') 
-			mToS.next(); 
+		while (    getToS().more ()
+				&& ( ! Character.isAlphabetic(getToS().ch()))
+				&& ( ! Character.isDigit(getToS().ch())) 
+				&& getToS().ch() != '(' 
+				&& getToS().ch() != ')' 
+				&& getToS().ch() != '_' 
+				&& getToS().ch() != '"' 
+				&& (c_allowed.indexOf(getToS().ch()) < 0) 
+				&& getToS().ch() != ';') 
+			getToS().next(); 
 	}
 
 	private boolean handleKeywordOpCode(String input, String t, boolean exec)
@@ -467,14 +496,9 @@ public class LLLCompiler
 		boolean bareLoad = true;
 		if (exec)
 		{
-//			Compiled c = new Compiled();
-			
-			if (compileLispFragment(new Frame(mToS.rest(), mFrames.peek())))
+			if (compileLispFragment(new Frame(getToS().rest(), mFrame)))
 			{
-//				appendCode(mCompiled, mLastFrame.mCompiled);
-				
-//				Compiled j = new Compiled();
-				while (compileLispFragment(new Frame(mToS.rest(), mFrames.peek())))
+				while (compileLispFragment(new Frame(getToS().rest(), mFrame)))
 					if (mLogging)
 						Log.e(TAG, "Additional items in bare store. Ignoring.");
 
@@ -482,106 +506,90 @@ public class LLLCompiler
 			}
 		}
 		
-		mCompiled.addPushInstructionWith(literalValue);
+		getCompiled().addPushInstructionWith(literalValue);
 		
 		if (exec)
-			mCompiled.addInstruction(bareLoad ? InstructionSet.OpCode.SLOAD : InstructionSet.OpCode.SSTORE);
+			mFrame.outputOpCode(bareLoad ? InstructionSet.OpCode.SLOAD : InstructionSet.OpCode.SSTORE);
 	}
 
 	private boolean handleSeq(String input, String t)
 	{
-		while (mToS.more ())
+		while (getToS().more ())
 		{
-//			Compiled c = new Compiled();
-			if (compileLispFragment(new Frame(mToS.rest(), mFrames.peek())))
-			{
-				//appendCode(mCompiled, mLastFrame.mCompiled);
-			}
-			else
+			if ( ! compileLispFragment(new Frame(getToS().rest(), mFrame)))
 				return false;
 		}
+		
+		mFrame.outputChildren();
+		
 		return true;
 	}
 
 	private boolean handleIf(String input, String t)
 	{
-		// Compile all the code...
-		List<Compiled> fragments = new ArrayList<Compiled>();
 		for (int i = 0; i < 3; ++i)
 		{
-//			Compiled c = new Compiled();
-//			fragments.add (c);
-
-			if ( ! compileLispFragment(new Frame(new Input (mToS.rest()), mFrames.peek())))
+			if ( ! compileLispFragment(new Frame(new Input (getToS().rest()), mFrame)))
 				return false;
-			
-//			fragments.add(mLastFrame.mCompiled);
 		}
 
 		// save first patch location and push a placeholder
 		// for the positive code location
-		int patch1 = mCompiled.addPushInstructionWith(0);
-		mCompiled.addLoc(patch1);
+		int patch1 = getCompiled().addPushInstructionWith(0);
+		getCompiled().addLoc(patch1);
 
 		// output predicate, it will leave zero/nonzero on tos
-		appendCode(mCompiled, fragments.get(0));
+		mFrame.outputChild(0);
 
 		// jump to positive if nonzero
-		mCompiled.addInstruction(InstructionSet.OpCode.JMPI);
+		mFrame.outputOpCode(InstructionSet.OpCode.JMPI);
 
 		// output false code block
-		appendCode(mCompiled, fragments.get(2));
+		mFrame.outputChild(2);
 
 		// unconditional jump to after true code block
-		int patch2 = mCompiled.addPushInstructionWith(0);
-		mCompiled.addLoc(patch2);
-		mCompiled.addInstruction(InstructionSet.OpCode.JMP);
+		int patch2 = getCompiled().addPushInstructionWith(0);
+		getCompiled().addLoc(patch2);
+		mFrame.outputOpCode(InstructionSet.OpCode.JMP);
 
 		// at start of true code block, patch first jump
-		mCompiled.setCode(patch1, mCompiled.getCode().size());
+		getCompiled().setCode(patch1, getCompiled().getCode().size());
 		
 		// output true code block
-		appendCode(mCompiled, fragments.get(1));
+		mFrame.outputChild(1);
 
 		// patch conditional jump at end of false block
-		mCompiled.setCode(patch2, mCompiled.getCode().size());
+		getCompiled().setCode(patch2, getCompiled().getCode().size());
 		return true;
 	}
 
 	private boolean handleWhen(String input, String t)
 	{
-		// Compile all the code...
-		List<Compiled> fragments = new ArrayList<Compiled>();
 		for (int i = 0; i < 2; ++i)
 		{
-//			Compiled c = new Compiled();
-//			fragments.add (c);
-			if ( ! compileLispFragment(new Frame(mToS.rest(), mFrames.peek())))
+			if ( ! compileLispFragment(new Frame(getToS().rest(), mFrame)))
 				return false;
-			
-//			fragments.add(mLastFrame.mCompiled);
 		}
 		
 		// record where we have to patch to get past this
 		// whole statement
-		int patch1 = mCompiled.addPushInstructionWith(0);
-		mCompiled.addLoc(patch1);
+		int patch1 = getCompiled().addPushInstructionWith(0);
+		getCompiled().addLoc(patch1);
 
-		// output the predicate that will leave zero/nonzero on the
-		// stack
-		appendCode(mCompiled, fragments.get(0));
+		// output the predicate that will leave zero/nonzero on the stack
+		mFrame.outputChild(0);
 
 		if (t == "WHEN")
-			mCompiled.addInstruction(InstructionSet.OpCode.NOT);
+			getCompiled().addInstruction(InstructionSet.OpCode.NOT);
 
 		// jump if nonzero to the location to be patched 
-		mCompiled.addInstruction(InstructionSet.OpCode.JMPI);
+		mFrame.outputOpCode(InstructionSet.OpCode.JMPI);
 
 		// append conditional code
-		appendCode(mCompiled, fragments.get(1));
+		mFrame.outputChild(1);
 
 		// patch now that we know where we end
-		mCompiled.setCode(patch1, mCompiled.getCode().size());
+		getCompiled().setCode(patch1, getCompiled().getCode().size());
 		return true;
 	}
 
@@ -593,162 +601,131 @@ public class LLLCompiler
 	 */
 	private boolean handleFor(String input, String t)
 	{
-		// Compile all the code...
-		List<Compiled> fragments = new ArrayList<Compiled>();
 		for (int i = 0; i < 2; ++i)
 		{
-//			Compiled c = new Compiled();
-//			fragments.add (c);
-			if ( ! compileLispFragment(new Frame(mToS.rest(), mFrames.peek())))
+			if ( ! compileLispFragment(new Frame(getToS().rest(), mFrame)))
 				return false;
-
-//			fragments.add(mLastFrame.mCompiled);
-
-//		if (compileLispFragment(d, e, _quiet, codes[2], locs[2]))
-//			return false;
 		}
 		
-		int startLocation = mCompiled.getCode().size();
+		int startLocation = getCompiled().getCode().size();
 
 		// setup location to jump around this statement
-		int patch1 = mCompiled.addPushInstructionWith(0);
-		mCompiled.addLoc(patch1);
+		int patch1 = getCompiled().addPushInstructionWith(0);
+		getCompiled().addLoc(patch1);
 
 		// output predicate, it leaves zero/nonzero on stack
-		appendCode(mCompiled, fragments.get(0));
+		mFrame.outputChild(0);
 
 		// jump out of this statement if zero on stack
-		mCompiled.addInstruction(InstructionSet.OpCode.NOT);
-		mCompiled.addInstruction(InstructionSet.OpCode.JMPI);
+		mFrame.outputOpCode(InstructionSet.OpCode.NOT);
+		mFrame.outputOpCode(InstructionSet.OpCode.JMPI);
 
 		// output body
-		appendCode(mCompiled, fragments.get(1));
+		mFrame.outputChild(1);
 
 		// jump back to beginning
-		int i = mCompiled.addPushInstructionWith(startLocation);
-		mCompiled.addLoc(i);
+		int i = getCompiled().addPushInstructionWith(startLocation);
+		getCompiled().addLoc(i);
 		
-		mCompiled.addInstruction(InstructionSet.OpCode.JMP);
+		mFrame.outputOpCode(InstructionSet.OpCode.JMP);
 
 		// patch condition now that we know the end
-		mCompiled.setCode(patch1, mCompiled.getCode().size());
+		getCompiled().setCode(patch1, getCompiled().getCode().size());
 		return true;
 	}
 
 	private boolean handleAnd(String input, String t)
 	{		
-		List<Compiled> fragments = new ArrayList<Compiled>();
-		boolean more = mToS.more ();
+		boolean more = getToS().more ();
 		while (more)
 		{
-//			Compiled c = new Compiled();
-//			fragments.add(c);
-
-			if ( ! compileLispFragment(new Frame(mToS.rest(), mFrames.peek())))
+			if ( ! compileLispFragment(new Frame(getToS().rest(), mFrame)))
 				more = false;
-			else
-			{
-//				fragments.add(mLastFrame.mCompiled);
-			}
 		}
 
-		if (fragments.size() < 2)
+		if (getFrame().mChildren.size() < 2)
 			return false;
-
-		// last one is empty.
-//		fragments.remove(fragments.size() - 1);
 
 		List<Integer> ends = new ArrayList<Integer>();
 
-		if (fragments.size() > 1)
+		if (getFrame().mChildren.size() > 1)
 		{
 			// see with zero (false)
-			mCompiled.addPushInstructionWith(0);
+			getCompiled().addPushInstructionWith(0);
 
-			for (int i = 1; i < fragments.size(); ++i)
+			for (int i = 1; i < getFrame().mChildren.size(); ++i)
 			{
 				// Push the false location.
-				int k = mCompiled.addPushInstructionWith(0);
+				int k = getCompiled().addPushInstructionWith(0);
 				ends.add(k);
-				mCompiled.addLoc(k);
+				getCompiled().addLoc(k);
 
 				// output predicate
-				appendCode(mCompiled, fragments.get(i - 1));	
+				mFrame.outputChild(i - 1);	
 
 				// Jump to end if zero 
-				mCompiled.addInstruction(InstructionSet.OpCode.NOT);
-				mCompiled.addInstruction(InstructionSet.OpCode.JMPI);
+				mFrame.outputOpCode(InstructionSet.OpCode.NOT);
+				mFrame.outputOpCode(InstructionSet.OpCode.JMPI);
 			}
 
-			mCompiled.addInstruction(InstructionSet.OpCode.POP);
+			mFrame.outputOpCode(InstructionSet.OpCode.POP);
 		}
 
 		// check if last one is true
-		appendCode(mCompiled, fragments.get(fragments.size() - 1));
+		mFrame.outputChild(getFrame().mChildren.size() - 1);	
 
 		// at end now, patch everyone to go here
 		for (Integer i: ends)
-			mCompiled.setCode(i, mCompiled.getCode().size());
+			getCompiled().setCode(i, getCompiled().getCode().size());
 
 		return true;
 	}
 	
 	private boolean handleOr(String input, String t)
 	{
-		List<Compiled> fragments = new ArrayList<Compiled>();
-		boolean more = mToS.more ();
+		boolean more = getToS().more ();
 		while (more)
 		{
-//			Compiled c = new Compiled();
-//			fragments.add(c);
-
-			if ( ! compileLispFragment(new Frame(mToS.rest(), mFrames.peek())))
+			if ( ! compileLispFragment(new Frame(getToS().rest(), mFrame)))
 				more = false;
-			else
-			{
-//				fragments.add(mLastFrame.mCompiled);
-			}
 		}
 
-		if (fragments.size() < 2)
+		if (getFrame().mChildren.size() < 2)
 			return false;
-
-		// last one is empty drop it
-//		fragments.remove(fragments.size() - 1);
 
 		List<Integer> ends = new ArrayList<Integer>();
 
-		if (fragments.size() > 1)
+		if (getFrame().mChildren.size() > 1)
 		{
 			// for each of the terms except the last one
 			
 			// first push non-zero to setup a JMPI
-			mCompiled.addPushInstructionWith(1);
+			getCompiled().addPushInstructionWith(1);
 
-			for (int i = 1; i < fragments.size(); ++i)
+			for (int i = 1; i < getFrame().mChildren.size(); ++i)
 			{
 				// save beginning of this block
-				int k = mCompiled.addPushInstructionWith(0);
+				int k = getCompiled().addPushInstructionWith(0);
 				ends.add(k);
-				mCompiled.addLoc(k);
+				getCompiled().addLoc(k);
 
 				// this code block will leave zero/nonzero on tos
-				appendCode(mCompiled, fragments.get(i - 1));
+				mFrame.outputChild(i - 1);
 
 				// jump to end if nonzero (true)
-				mCompiled.addInstruction(InstructionSet.OpCode.JMPI);
+				getCompiled().addInstruction(InstructionSet.OpCode.JMPI);
 			}
 
 			// gets here if all tests were zero, discard the 1 we pushed before
-			mCompiled.addInstruction(InstructionSet.OpCode.POP);
+			getCompiled().addInstruction(InstructionSet.OpCode.POP);
 		}
 
 		// append the last one, either zero or nonzero
-		appendCode(mCompiled, fragments.get(fragments.size() - 1));
+		mFrame.outputChild(getFrame().mChildren.size() - 1);
 
 		// at end now, patch everyone to go here
 		for (Integer i: ends)
-			mCompiled.setCode(i, mCompiled.getCode().size());
+			getCompiled().setCode(i, getCompiled().getCode().size());
 
 		return true;
 	}
@@ -760,34 +737,17 @@ public class LLLCompiler
 		{
 			if (exec)
 			{
-				List<Compiled> fragments = new ArrayList<Compiled>();
-				{
-//					Compiled c = new Compiled();
-//					fragments.add(c);
-					while (mToS.more ()
-							&& compileLispFragment(new Frame(mToS.rest(), mFrames.peek())))
-					{
-//						Compiled c1 = new Compiled();
-//						fragments.add(c1);
+				while (    getToS().more ()
+						&& compileLispFragment(new Frame(getToS().rest(), mFrame)))
+					;
 
-//						fragments.add(mLastFrame.mCompiled);
-					}
-				}
-				
-				// why reverse order, possibly to match change to opcodes
-				for (int i = fragments.size() - 1; i >= 0; --i)
-//				for (int i = 0; i < fragments.size(); ++i)
-				{
-					Compiled c = fragments.get(i);
-					appendCode(mCompiled, c);
-				}
-				
-				mCompiled.addInstruction(it);
+				mFrame.outputChildrenReversed();
+				mFrame.outputOpCode(it);
 			}
 			else
 			{
-				mCompiled.addInstruction(InstructionSet.OpCode.PUSH);
-				mCompiled.addInstruction(it);
+				mFrame.outputOpCode(InstructionSet.OpCode.PUSH);
+				mFrame.outputOpCode(it);
 			}
 			
 			return true;
@@ -795,7 +755,7 @@ public class LLLCompiler
 
 		return false;
 	}
-	
+
 	static private Map<String, InstructionSet.OpCode> c_arith = new HashMap<String, InstructionSet.OpCode>();
 	static
 	{
@@ -811,21 +771,15 @@ public class LLLCompiler
 		InstructionSet.OpCode it = c_arith.get(t);
 		if (it != null)
 		{
-			int i = 0;
-			while (mToS.more ())
+			for (int i = 0; i < 2; ++i)
 			{
-//				Compiled c = new Compiled();
-				if (compileLispFragment(new Frame(mToS.rest(), mFrames.peek())))
-				{
-//					appendCode(mCompiled, mLastFrame.mCompiled);
-
-					if (i != 0)
-						mCompiled.addInstruction(it);
-					++i;
-				}
-				else
-					break;
+				if (getToS().more ())
+					if ( ! compileLispFragment(new Frame(getToS().rest(), mFrame)))
+						return false;
 			}
+			
+			mFrame.outputChildrenReversed();
+			mFrame.outputOpCode(it);
 			return true;
 		}
 
@@ -854,79 +808,44 @@ public class LLLCompiler
 		InstructionSet.OpCode it = c_binary.get(t);
 		if (it != null)
 		{
-			List<Compiled> fragments = new ArrayList<Compiled>();
-			{
-//				Compiled c = new Compiled();
-//				fragments.add(c);
-				while (mToS.more () && compileLispFragment(new Frame(mToS.rest(), mFrames.peek())))
-				{
-//					c = new Compiled();
-//					fragments.add(mLastFrame.mCompiled);
-				}
-				
-//				fragments.remove(fragments.size() - 1);
-			}
+			while (getToS().more () 
+					&& compileLispFragment(new Frame(getToS().rest(), mFrame)))
+				;
 			
-			if (fragments.size() > 2)
+			if (getFrame().mChildren.size() > 2)
 			{
 				Log.e(TAG, "Greater than two arguments given to binary operator " + t + "; using first two only.");
-				while (fragments.size () > 2)
-					fragments.remove(fragments.size() - 1);
 			}
-			
-			// why reverse order, possibly to match change to opcodes
-			for (int i = fragments.size() - 1; i >= 0; --i)
-//			for (int i = 0; i < fragments.size(); ++i)
-			{
-				Compiled c = fragments.get(i);
-				appendCode(mCompiled, c);
-			}
+
+			mFrame.outputChildrenReversed();
 			
 			if (it == InstructionSet.OpCode.NOT)
-				mCompiled.addInstruction(InstructionSet.OpCode.EQ);
+				mFrame.outputOpCode(InstructionSet.OpCode.EQ);
 
-			mCompiled.addInstruction(it);
+			mFrame.outputOpCode(it);
 		}
 		else
 		{
 			it = c_unary.get(t);
 			if (it != null)
 			{
-				List<Compiled> fragments = new ArrayList<Compiled>();
-				{
-//					Compiled c = new Compiled();
-//					fragments.add(c);
-					while (mToS.more ()	&& compileLispFragment(new Frame(mToS.rest(), mFrames.peek())))
-					{
-//						c = new Compiled();
-//						fragments.add(mLastFrame.mCompiled);
-					}
-	
-//					fragments.remove(fragments.size() - 1);
-				}
+				while (getToS().more ()	&& compileLispFragment(new Frame(getToS().rest(), mFrame)))
+					;
 				
-				if (fragments.size() > 2)
+				if (getFrame().mChildren.size() > 2)
 				{
 					Log.e(TAG, "Greater than one argument given to unary operator " + t + "; using first only.");
-					while (fragments.size () > 1)
-						fragments.remove(fragments.size() - 1);
 				}
 				
-				// why reverse order, possibly to match change to opcodes
-				for (int i = fragments.size() - 1; i >= 0; --i)
-//				for (int i = 0; i < fragments.size(); ++i)
-				{
-					Compiled c = fragments.get(i);
-					appendCode(mCompiled, c);
-				}
-
-				mCompiled.addInstruction(it);
+				mFrame.outputChildrenReversed();
+				mFrame.outputOpCode(it);
 			}
 			else 
 				Log.e(TAG, "Unknown assembler token " + t);
 		}		
 	}
 	
+
 	void appendCode(Compiled compiled, Compiled c)
 	{
 		for (Integer i: c.getLocs())
