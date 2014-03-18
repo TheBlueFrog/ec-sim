@@ -7,6 +7,11 @@ import java.util.Map;
 
 import com.mike.ethereum.sim.CommonEth.Address;
 import com.mike.ethereum.sim.CommonEth.u256;
+import com.mike.ethereum.sim.exceptions.BadInstructionExeption;
+import com.mike.ethereum.sim.exceptions.OperandOutOfRangeException;
+import com.mike.ethereum.sim.exceptions.StackTooSmallException;
+import com.mike.ethereum.sim.exceptions.StackUnderflowException;
+import com.mike.ethereum.sim.exceptions.StepsDoneException;
 
 public class VirtualMachine 
 {

@@ -1,4 +1,4 @@
-package com.mike.ethereum.sim;
+package com.mike.ethereum.sim.exceptions;
 
 public class BadInstructionExeption extends Exception
 {

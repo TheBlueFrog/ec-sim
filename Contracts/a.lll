@@ -1,4 +1,4 @@
 
 (seq
-  (mktx (txsender) (txdata 0) 0)
+  (mktx (txsender) (txdata 0) 97)
 )

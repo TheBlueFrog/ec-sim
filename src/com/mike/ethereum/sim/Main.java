@@ -11,7 +11,7 @@ public class Main
 {
 	private static final String TAG = Main.class.getSimpleName();
 
-	static private boolean mLogging = false;
+	static private boolean mLogging = true;
 	
 	public static void main(String[] args)
 	{
