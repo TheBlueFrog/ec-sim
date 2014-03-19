@@ -5,7 +5,7 @@
 ;  (unless (>= (txvalue) (* 20 (basefee))) (stop))
 ;  (unless (>= (txvalue) (* 20 (basefee))) (stop))
 
-; this leave 4 101's on the stack
+; this leaves 101's on the stack
 ;  (unless (<= (txvalue) (* 20 (basefee))) (+ 100 1))
 ;  (unless (<= (txvalue) (* 20 (basefee))) (+ 100 1))
 ;  (unless (<= (txvalue) (* 20 (basefee))) (+ 100 1))

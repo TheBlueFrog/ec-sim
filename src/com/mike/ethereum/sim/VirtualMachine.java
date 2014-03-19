@@ -76,7 +76,10 @@ public class VirtualMachine
 			throw new StackTooSmallException(""); 
 		
 		if (m_stack.size() < i)
-			throw new StackUnderflowException (String.format("Requires %d items, only %d on stack.", i, m_stack.size()));
+			throw new StackUnderflowException (String.format("Requires %d items, only %d on stack.  PC = %s", 
+					i, 
+					m_stack.size(),
+					m_curPC.toString()));
 	}
 	
 	private u256 popStack ()
@@ -626,8 +629,8 @@ public class VirtualMachine
 					P[ S'[0] ] := S'[1]
 				 */
 				require(2);
-				y = popStack();		// BACKWARDS does not match spec
 				x = popStack();
+				y = popStack();
 				_ext.setStore(x, y);
 				break;
 			case JMP:								// pops one item and sets the index pointer (PC) to S[-1]

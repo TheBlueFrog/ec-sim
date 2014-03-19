@@ -15,7 +15,7 @@ public class Main
 	
 	public static void main(String[] args)
 	{
-		LLLCompiler x = new LLLCompiler(mLogging);
+		LLLCompiler x = new LLLCompiler(false);
 		Executor e = new Executor (true);
 		
 		// suck up all the contracts that are in the given dir
