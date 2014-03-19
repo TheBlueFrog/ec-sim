@@ -400,12 +400,15 @@ public class Frame
 
 	private boolean handleSeq(String input, String t)
 	{
-		while (getToS().more ())
-		{
-			if ( ! new Frame(getToS().rest(), this).compileLispFragment())
-				return false;
-		}
-		
+//		while (getToS().more ())
+//		{
+//			if ( ! new Frame(getToS().rest(), this).compileLispFragment())
+//				return false;
+//		}
+		while (new Frame(getToS().rest(), this).compileLispFragment())
+			;
+	
+		trimDeadChildren();
 		outputChildren();
 		
 		return true;
