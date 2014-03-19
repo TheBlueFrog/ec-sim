@@ -46,6 +46,8 @@ public class Main
 		
 		Account sender = Account.createAccount (new u256("111111111111"), new u256("1111"));
 
+		int numA = 3;
+		int numB = 3;
 		{
 			Transaction t = new Transaction (
 					sender, 
@@ -55,7 +57,7 @@ public class Main
 	
 			// make 3 deposits
 			
-			for (int i = 0; i < 3; ++i)
+			for (int i = 0; i < numA; ++i)
 			{
 				Log.d(TAG, String.format("%s deposits %s to contract (%s, balance %s)", 
 						sender.getShortAddress(),
@@ -72,6 +74,7 @@ public class Main
 			}
 		}
 		
+		if (numB > 0)
 		{
 			/*
 			Finally, we'll make a withdrawal of fund back to our account. Let's 
@@ -89,7 +92,7 @@ public class Main
 			u256s data = new u256s ();
 			data.add(new u256(97));
 			
-			for (int i = 0; i < 2; ++i)
+			for (int i = 0; i < numB; ++i)
 			{
 				Transaction t = new Transaction (
 						sender, 
